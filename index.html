@@ -2009,12 +2009,16 @@
       const heroRiver = river ? river.equities[heroIdx] : heroTurn;
       const heroNet = heroRiver - heroPre;
       const headline = [];
+      const lockedEarly = heroAllInStreet === "Preflop" || heroAllInStreet === "Flop";
       const verdict =
         heroAllInStreet && heroNet < -0.1 ? "VERDICT: Mostly variance (you were all-in before runout)." :
         (!heroAllInStreet && heroNet < -0.1 ? "VERDICT: Likely leak in continue strategy." :
         (heroNet > 0.1 ? "VERDICT: Good line and strong realization." : "VERDICT: Close to neutral / mixed."));
       headline.push(verdict);
       headline.push(`Actionable summary: Pre ${(heroPre * 100).toFixed(1)} -> Flop ${(heroFlop * 100).toFixed(1)} -> Turn ${(heroTurn * 100).toFixed(1)} -> River ${(heroRiver * 100).toFixed(1)}.`);
+      if (lockedEarly) {
+        headline.push(`Decision lock: you were all-in on ${heroAllInStreet}; turn/river are runout variance, not decision quality.`);
+      }
       if (river) {
         const maxEq = Math.max(...river.equities);
         const winners = river.equities.map((v, i) => ({ v, i })).filter(x => Math.abs(x.v - maxEq) < 1e-9);
@@ -2029,6 +2033,15 @@
       }
       const band = (x) => x >= 0.58 ? "pressure/value-heavy" : (x >= 0.42 ? "mixed realization" : "defensive / fold-heavy");
       headline.push(`Flop band: ${band(heroFlop)} | Turn band: ${band(heroTurn)}.`);
+      if (lockedEarly) {
+        if (heroFlop < 0.4) {
+          headline.push("Actionable: when stacking off this early, require stronger nut equity or more redraw coverage.");
+        } else if (heroFlop >= 0.55) {
+          headline.push("Actionable: this is a standard stack-off threshold; prioritize similar high-equity + redraw structures.");
+        } else {
+          headline.push("Actionable: marginal stack-off region; tighten slightly unless pot odds or dead money improve threshold.");
+        }
+      }
       const turnDrop = heroTurn - heroFlop;
       if (turnDrop <= -0.12 && !heroAllInStreet) {
         headline.push("Leak check: large flop->turn equity drop; likely over-calling turn with non-nut structures.");
@@ -2113,6 +2126,10 @@
       if (!runs.length) {
         // only preflop when no board cards are available
       } else {
+        const combinedFlop = runs[0]?.flop;
+        if (combinedFlop?.length >= 3) {
+          jobs.push({ run: 0, street: "Flop", cards: combinedFlop });
+        }
         for (const runData of runs) {
           if (runData.flop?.length >= 3) jobs.push({ run: runData.run, street: "Flop", cards: runData.flop });
           if (runData.turn?.length >= 4) jobs.push({ run: runData.run, street: "Turn", cards: runData.turn });
