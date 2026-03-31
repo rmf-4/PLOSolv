@@ -504,6 +504,7 @@
 
       <div class="controls">
         <button class="primary" id="runBtn">Run It Out</button>
+        <button class="secondary" id="copyShortLinkBtn">Copy Share Link</button>
         <button class="secondary" id="exploreRunoutsBtn">Runout Explorer</button>
         <button class="secondary" id="randomFlopBtn">Random Flop</button>
         <button class="secondary" id="dealTurnBtn">Deal Turn</button>
@@ -650,6 +651,7 @@
       rangeTabPanel: document.getElementById("rangeTabPanel"),
       reviewTabPanel: document.getElementById("reviewTabPanel"),
       runBtn: document.getElementById("runBtn"),
+      copyShortLinkBtn: document.getElementById("copyShortLinkBtn"),
       exploreRunoutsBtn: document.getElementById("exploreRunoutsBtn"),
       randomFlopBtn: document.getElementById("randomFlopBtn"),
       dealTurnBtn: document.getElementById("dealTurnBtn"),
@@ -696,6 +698,7 @@
       return deck;
     }
     const FULL_DECK = fullDeck();
+    const CARD_TO_INDEX = new Map(FULL_DECK.map((c, i) => [c, i]));
 
     function cardSuitMeta(card) {
       const s = card[1];
@@ -1463,6 +1466,44 @@
       return urlMatch ? urlMatch[1] : null;
     }
 
+    function encodeCompactHandState() {
+      const tabCode = state.tab === "range" ? "r" : (state.tab === "review" ? "v" : "e");
+      const slots = [...state.p1, ...state.p2, ...state.board];
+      const cards = slots.map(c => {
+        if (!c) return "__";
+        const idx = CARD_TO_INDEX.get(c);
+        if (idx == null) return "__";
+        return idx.toString(36).padStart(2, "0");
+      }).join("");
+      return `1${tabCode}${cards}`;
+    }
+
+    function decodeCompactHandState(token) {
+      if (!token || token.length < 28) return false;
+      if (token[0] !== "1") return false;
+      const tabCode = token[1];
+      const payload = token.slice(2);
+      if (payload.length !== 26) return false;
+      const slots = [];
+      for (let i = 0; i < 26; i += 2) {
+        const part = payload.slice(i, i + 2);
+        if (part === "__") {
+          slots.push(null);
+        } else {
+          const idx = Number.parseInt(part, 36);
+          if (!Number.isInteger(idx) || idx < 0 || idx >= FULL_DECK.length) return false;
+          slots.push(FULL_DECK[idx]);
+        }
+      }
+      state.p1 = slots.slice(0, 4);
+      state.p2 = slots.slice(4, 8);
+      state.board = slots.slice(8, 13);
+      if (tabCode === "r") state.tab = "range";
+      else if (tabCode === "v") state.tab = "review";
+      else state.tab = "exact";
+      return true;
+    }
+
     function makeBoardFromCards(cards) {
       const b = [null, null, null, null, null];
       for (let i = 0; i < Math.min(5, cards.length); i++) b[i] = cards[i];
@@ -1679,6 +1720,10 @@
     }
 
     function loadStateFromUrl() {
+      const shortToken = new URLSearchParams(location.search).get("h");
+      if (shortToken && decodeCompactHandState(shortToken)) {
+        return;
+      }
       const m = location.hash.match(/state=([^&]+)/);
       if (!m) return;
       try {
@@ -1762,6 +1807,21 @@
       const reason = reasonMap[result.stopReason] || "completed";
       el.status.textContent = `P1 ${(result.p1Eq * 100).toFixed(2)}% over ${sampled} trials, CI95 +/-${ciPct}% (${reason})${exactTag}`;
       refreshActionState();
+    });
+
+    el.copyShortLinkBtn.addEventListener("click", async () => {
+      const token = encodeCompactHandState();
+      const shortUrl = `${location.origin}${location.pathname}?h=${token}`;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(shortUrl);
+        } else {
+          throw new Error("Clipboard API unavailable");
+        }
+        el.status.textContent = "Share link copied.";
+      } catch (_err) {
+        el.status.textContent = `Copy failed. Use this link: ${shortUrl}`;
+      }
     });
 
     el.clearBoardBtn.addEventListener("click", () => {
