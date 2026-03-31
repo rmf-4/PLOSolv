@@ -402,13 +402,14 @@
       color: #cfe2da;
     }
     .timeline-list {
-      display: grid;
-      gap: 4px;
-      max-height: 260px;
+      display: block;
+      height: 260px;
       overflow-y: auto;
       overflow-x: hidden;
       overscroll-behavior: contain;
       margin-top: 6px;
+      padding-right: 2px;
+      -webkit-overflow-scrolling: touch;
     }
     .timeline-item {
       display: flex;
@@ -420,17 +421,22 @@
       padding: 5px 7px;
       font-size: 0.77rem;
       color: #d9e9e2;
+      margin-bottom: 4px;
     }
     .coach-list {
       margin-top: 6px;
-      display: grid;
-      gap: 5px;
+      display: block;
       font-size: 0.8rem;
       color: #dcebe4;
-      max-height: 260px;
+      height: 260px;
       overflow-y: auto;
       overflow-x: hidden;
       overscroll-behavior: contain;
+      padding-right: 2px;
+      -webkit-overflow-scrolling: touch;
+    }
+    .coach-list > div {
+      margin-bottom: 5px;
     }
     @media (max-width: 900px) {
       .range-grid { grid-template-columns: 1fr; }
@@ -1851,7 +1857,6 @@
 
     function buildCoachNotes(review, heroIdx) {
       const notes = [];
-      const advice = [];
       const run1 = review.results.filter(r => r.run === 1 || (r.run == null && r.street !== "Preflop"));
       const pre = review.results.find(r => r.street === "Preflop");
       const flop = run1.find(r => r.street === "Flop");
@@ -1862,19 +1867,8 @@
       const heroName = review.players[heroIdx]?.name || `P${heroIdx + 1}`;
       const heroPre = pre.equities[heroIdx] || 0;
       const heroAllInStreet = detectHeroAllInStreet(review, heroIdx);
-      notes.push(`You are ${heroName} (P${heroIdx + 1}). Preflop equity: ${(heroPre * 100).toFixed(1)}%.`);
-      notes.push(`Table preflop favorite: P${leaderIdx + 1} at ${(pre.equities[leaderIdx] * 100).toFixed(1)}%.`);
-      const streetVec = [
-        { n: "Pre", v: heroPre },
-        { n: "Flop", v: flop ? flop.equities[heroIdx] : heroPre },
-        { n: "Turn", v: turn ? turn.equities[heroIdx] : (flop ? flop.equities[heroIdx] : heroPre) },
-        { n: "River", v: river ? river.equities[heroIdx] : (turn ? turn.equities[heroIdx] : (flop ? flop.equities[heroIdx] : heroPre)) }
-      ];
-      const mean = streetVec.reduce((s, x) => s + x.v, 0) / streetVec.length;
-      const variance = streetVec.reduce((s, x) => s + Math.pow(x.v - mean, 2), 0) / streetVec.length;
-      const stdev = Math.sqrt(variance);
-      notes.push(`Street profile: ${streetVec.map(x => `${x.n} ${(x.v * 100).toFixed(1)}%`).join(" | ")}.`);
-      notes.push(`Volatility metric (stdev): ${(stdev * 100).toFixed(1)} pts.`);
+      notes.push(`You are ${heroName} (P${heroIdx + 1}).`);
+      notes.push(`Preflop equity ${(heroPre * 100).toFixed(1)}% | Table favorite P${leaderIdx + 1} at ${(pre.equities[leaderIdx] * 100).toFixed(1)}%.`);
       function swing(from, to, streetName) {
         if (!from || !to) return;
         let bestI = 0;
@@ -1898,19 +1892,12 @@
       const heroTurn = turn ? turn.equities[heroIdx] : heroFlop;
       const heroRiver = river ? river.equities[heroIdx] : heroTurn;
       const heroNet = heroRiver - heroPre;
-      if (heroNet <= -0.1 && !heroAllInStreet) {
-        notes.push(`Leak signal: your equity fell ${Math.abs(heroNet * 100).toFixed(1)} points by river. Likely too wide continuation against stronger ranges.`);
-        advice.push("Adjustment: tighten flop/turn continue thresholds and prioritize nut-draw + redraw structures.");
-      } else if (heroNet <= -0.1 && heroAllInStreet) {
-        notes.push(`Variance note: you were all-in on ${heroAllInStreet}, then equity ran against you by ${Math.abs(heroNet * 100).toFixed(1)} points (possible suckout sequence).`);
-        advice.push("Adjustment: evaluate decision quality at all-in point (pot odds + equity), not final runout.");
-      } else if (heroNet >= 0.1) {
-        notes.push(`Strong realization: your line gained ${Math.abs(heroNet * 100).toFixed(1)} points from preflop to river.`);
-        advice.push("GTO-style takeaway: your line retained high-equity/nut-heavy branches while weaker combos dropped out.");
-      } else {
-        notes.push("Near-GTO stability: your overall equity stayed relatively stable across streets.");
-        advice.push("Adjustment: choose lower-variance sizing lines in similar spots; edge likely comes from small frequency improvements.");
-      }
+      const verdict =
+        heroAllInStreet && heroNet < -0.1 ? "VERDICT: Mostly variance (you were all-in before runout)." :
+        (!heroAllInStreet && heroNet < -0.1 ? "VERDICT: Likely leak in continue strategy." :
+        (heroNet > 0.1 ? "VERDICT: Good line and strong realization." : "VERDICT: Close to neutral / mixed."));
+      notes.push(verdict);
+      notes.push(`Street profile: Pre ${(heroPre * 100).toFixed(1)}% -> Flop ${(heroFlop * 100).toFixed(1)}% -> Turn ${(heroTurn * 100).toFixed(1)}% -> River ${(heroRiver * 100).toFixed(1)}%.`);
       if (river) {
         const maxEq = Math.max(...river.equities);
         const winners = river.equities.map((v, i) => ({ v, i })).filter(x => Math.abs(x.v - maxEq) < 1e-9);
@@ -1918,27 +1905,25 @@
         if (winners.length > 1) notes.push(`River finishes as chopped equity between ${winners.map(w => `P${w.i + 1}`).join(", ")}.`);
         else notes.push(`River winner by equity: P${winners[0].i + 1} (${(maxEq * 100).toFixed(1)}%).`);
         if (!heroWon && heroRiver < 0.2 && !heroAllInStreet) {
-          advice.push("Coach: line appears non-optimal for your seat in this tree; fold/call less and continue with stronger nut potential.");
+          notes.push("Actionable: fold/call less vs this line; continue with stronger nut potential + redraws.");
         } else if (heroWon && heroRiver > 0.5) {
-          advice.push("Coach: strong value-realization line for your seat; this is close to a GTO-favored outcome.");
+          notes.push("Actionable: keep this aggression pattern; it matches a high-EV value-realization line.");
         }
       }
-      const band = (x) => x >= 0.58 ? "value-heavy / pressure" : (x >= 0.42 ? "mixed / realization" : "defensive / fold-heavy");
-      advice.push(`Flop strategy band: ${band(heroFlop)}.`);
-      advice.push(`Turn strategy band: ${band(heroTurn)}.`);
+      const band = (x) => x >= 0.58 ? "pressure/value-heavy" : (x >= 0.42 ? "mixed realization" : "defensive / fold-heavy");
+      notes.push(`Flop band: ${band(heroFlop)} | Turn band: ${band(heroTurn)}.`);
       const turnDrop = heroTurn - heroFlop;
       if (turnDrop <= -0.12 && !heroAllInStreet) {
-        advice.push("Technical leak-check: large flop->turn equity drop; likely over-calling turn with non-nut structures.");
+        notes.push("Leak check: large flop->turn equity drop; likely over-calling turn with non-nut structures.");
       }
       const preGap = heroPre - pre.equities[leaderIdx];
       if (preGap <= -0.12) {
-        advice.push("Range note: significant preflop equity deficit vs table leader; prioritize nuttier 3-bet/call compositions.");
+        notes.push("Range note: preflop equity deficit vs leader; tighten preflop continues and bias to nuttier structures.");
       } else if (preGap >= 0.08) {
-        advice.push("Range note: preflop edge present; can support higher aggression frequencies when board interaction stays favorable.");
+        notes.push("Range note: preflop edge present; support higher aggression frequencies on favorable board interaction.");
       }
       if (notes.length < 2) notes.push("Action likely standard; no major equity swing detected.");
-      if (!advice.length) advice.push("Adjustment: review flop/turn continue thresholds against stronger ranges.");
-      return [...notes, ...advice];
+      return notes;
     }
 
     function renderCoachForHero() {
@@ -1970,10 +1955,17 @@
         const o = runMap.get(evt.run);
         o[evt.turn] = evt.cards.slice();
       }
+      const sharedFlopRun = [...runMap.entries()]
+        .map(([run, turns]) => ({ run, turns }))
+        .find(x => x.turns[1] && x.turns[1].length >= 3);
+      const sharedFlop = sharedFlopRun ? sharedFlopRun.turns[1].slice(0, 3) : null;
+
       const runs = [];
       for (const [run, turns] of [...runMap.entries()].sort((a, b) => a[0] - b[0])) {
-        if (!turns[1] || turns[1].length < 3) continue;
-        const flop = turns[1].slice(0, 3);
+        const flop = (turns[1] && turns[1].length >= 3)
+          ? turns[1].slice(0, 3)
+          : (sharedFlop ? sharedFlop.slice() : null);
+        if (!flop) continue;
         const turn = turns[2] && turns[2][0] ? [...flop, turns[2][0]] : flop.slice();
         const river = turns[3] && turns[3][0] ? [...turn, turns[3][0]] : turn.slice();
         runs.push({ run, flop, turn, river });
