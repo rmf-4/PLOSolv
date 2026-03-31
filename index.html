@@ -30,7 +30,7 @@
         radial-gradient(1100px 640px at 18% 12%, #1b5d49 0%, transparent 46%),
         radial-gradient(1000px 600px at 82% 8%, #164b3b 0%, transparent 44%),
         linear-gradient(180deg, #05110d, var(--bg) 45%, #040906);
-      height: 100vh;
+      height: 100dvh;
       overflow: hidden;
       padding: 10px;
     }
@@ -40,8 +40,8 @@
       margin: 0 auto;
       display: grid;
       gap: 8px;
-      height: calc(100vh - 20px);
-      grid-template-rows: auto auto 1fr;
+      height: calc(100dvh - 20px);
+      grid-template-rows: auto auto minmax(0, 1fr);
     }
 
     .header {
@@ -297,6 +297,16 @@
     .table, .picker {
       overflow: hidden;
     }
+    #reviewTabPanel {
+      display: grid;
+      gap: 8px;
+      grid-auto-rows: max-content;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding-right: 4px;
+      overscroll-behavior-y: auto;
+    }
 
     .tabs {
       display: flex;
@@ -370,6 +380,7 @@
       padding: 8px;
       font-size: 0.82rem;
       color: #e0efe8;
+      min-height: 0;
     }
     .review-players-grid {
       display: grid;
@@ -403,12 +414,14 @@
     }
     .timeline-list {
       display: block;
-      height: 260px;
+      height: clamp(220px, 34vh, 420px);
       overflow-y: auto;
       overflow-x: hidden;
-      overscroll-behavior: contain;
+      overscroll-behavior: auto;
       margin-top: 6px;
       padding-right: 2px;
+      padding-bottom: 10px;
+      scroll-padding-bottom: 10px;
       -webkit-overflow-scrolling: touch;
     }
     .timeline-item {
@@ -428,11 +441,13 @@
       display: block;
       font-size: 0.8rem;
       color: #dcebe4;
-      height: 260px;
+      height: clamp(220px, 34vh, 420px);
       overflow-y: auto;
       overflow-x: hidden;
-      overscroll-behavior: contain;
+      overscroll-behavior: auto;
       padding-right: 2px;
+      padding-bottom: 10px;
+      scroll-padding-bottom: 10px;
       -webkit-overflow-scrolling: touch;
     }
     .coach-list > div {
@@ -466,6 +481,7 @@
       body { height: auto; overflow: auto; padding: 10px; }
       .app { height: auto; grid-template-rows: none; }
       .table, .picker { overflow: visible; }
+      #reviewTabPanel { overflow: visible; padding-right: 0; }
       .header { padding: 10px; }
       .status { max-width: 100%; text-align: left; }
       .tabs { gap: 8px; }
@@ -489,6 +505,9 @@
         gap: 3px;
       }
       .review-row span:last-child { font-size: 0.76rem; }
+      .timeline-list, .coach-list {
+        height: min(46vh, 340px);
+      }
     }
   </style>
 </head>
