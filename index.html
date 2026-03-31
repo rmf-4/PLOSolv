@@ -403,8 +403,8 @@
     .timeline-list {
       display: grid;
       gap: 4px;
-      max-height: none;
-      overflow: hidden;
+      max-height: 180px;
+      overflow: auto;
       margin-top: 6px;
     }
     .timeline-item {
@@ -424,8 +424,8 @@
       gap: 5px;
       font-size: 0.8rem;
       color: #dcebe4;
-      max-height: none;
-      overflow: hidden;
+      max-height: 180px;
+      overflow: auto;
     }
     @media (max-width: 900px) {
       .range-grid { grid-template-columns: 1fr; }
@@ -1659,7 +1659,7 @@
       const knownCount = knownBoard.filter(Boolean).length;
       const counts = Array(hands.length).fill(0);
       let trials = 0;
-      const yieldUi = () => new Promise(r => setTimeout(r, 0));
+      const yieldUi = () => new Promise(r => requestAnimationFrame(() => r()));
 
       const report = (done, total) => {
         if (!onProgress || total <= 0) return;
@@ -1674,16 +1674,19 @@
       } else if (knownCount === 4) {
         const deck = FULL_DECK.filter(c => !used.has(c));
         const total = deck.length;
-        for (let i = 0; i < deck.length; i++) {
-          const board = knownBoard.slice();
-          board[4] = deck[i];
-          const winners = evaluateRunoutWinners(hands, board);
-          updateEquityFromWinners(counts, winners);
-          trials++;
-          if (i % 12 === 0) {
-            report(i + 1, total);
-            await yieldUi();
+        let i = 0;
+        while (i < deck.length) {
+          const sliceStart = performance.now();
+          while (i < deck.length && (performance.now() - sliceStart) < 14) {
+            const board = knownBoard.slice();
+            board[4] = deck[i];
+            const winners = evaluateRunoutWinners(hands, board);
+            updateEquityFromWinners(counts, winners);
+            trials++;
+            i++;
           }
+          report(i, total);
+          await yieldUi();
         }
         report(total, total);
       } else if (knownCount === 3) {
@@ -1691,6 +1694,7 @@
         const total = (deck.length * (deck.length - 1)) / 2;
         let done = 0;
         for (let i = 0; i < deck.length - 1; i++) {
+          let sliceStart = performance.now();
           for (let j = i + 1; j < deck.length; j++) {
             const board = knownBoard.slice();
             board[3] = deck[i];
@@ -1699,9 +1703,10 @@
             updateEquityFromWinners(counts, winners);
             trials++;
             done++;
-            if (done % 80 === 0) {
+            if ((performance.now() - sliceStart) >= 14) {
               report(done, total);
               await yieldUi();
+              sliceStart = performance.now();
             }
           }
         }
@@ -1711,17 +1716,20 @@
         const deck = FULL_DECK.filter(c => !used.has(c));
         const missingIdx = [];
         for (let i = 0; i < 5; i++) if (!knownBoard[i]) missingIdx.push(i);
-        for (let t = 0; t < maxTrials; t++) {
-          const board = knownBoard.slice();
-          const picks = sampleUniqueIndices(deck.length, missingIdx.length);
-          for (let i = 0; i < missingIdx.length; i++) board[missingIdx[i]] = deck[picks[i]];
-          const winners = evaluateRunoutWinners(hands, board);
-          updateEquityFromWinners(counts, winners);
-          trials++;
-          if (t % 1400 === 0) {
-            report(t + 1, maxTrials);
-            await yieldUi();
+        let t = 0;
+        while (t < maxTrials) {
+          const sliceStart = performance.now();
+          while (t < maxTrials && (performance.now() - sliceStart) < 14) {
+            const board = knownBoard.slice();
+            const picks = sampleUniqueIndices(deck.length, missingIdx.length);
+            for (let i = 0; i < missingIdx.length; i++) board[missingIdx[i]] = deck[picks[i]];
+            const winners = evaluateRunoutWinners(hands, board);
+            updateEquityFromWinners(counts, winners);
+            trials++;
+            t++;
           }
+          report(t, maxTrials);
+          await yieldUi();
         }
         report(maxTrials, maxTrials);
       }
@@ -1838,6 +1846,7 @@
 
     function buildCoachNotes(review, heroIdx) {
       const notes = [];
+      const advice = [];
       const run1 = review.results.filter(r => r.run === 1 || (r.run == null && r.street !== "Preflop"));
       const pre = review.results.find(r => r.street === "Preflop");
       const flop = run1.find(r => r.street === "Flop");
@@ -1850,6 +1859,17 @@
       const heroAllInStreet = detectHeroAllInStreet(review, heroIdx);
       notes.push(`You are ${heroName} (P${heroIdx + 1}). Preflop equity: ${(heroPre * 100).toFixed(1)}%.`);
       notes.push(`Table preflop favorite: P${leaderIdx + 1} at ${(pre.equities[leaderIdx] * 100).toFixed(1)}%.`);
+      const streetVec = [
+        { n: "Pre", v: heroPre },
+        { n: "Flop", v: flop ? flop.equities[heroIdx] : heroPre },
+        { n: "Turn", v: turn ? turn.equities[heroIdx] : (flop ? flop.equities[heroIdx] : heroPre) },
+        { n: "River", v: river ? river.equities[heroIdx] : (turn ? turn.equities[heroIdx] : (flop ? flop.equities[heroIdx] : heroPre)) }
+      ];
+      const mean = streetVec.reduce((s, x) => s + x.v, 0) / streetVec.length;
+      const variance = streetVec.reduce((s, x) => s + Math.pow(x.v - mean, 2), 0) / streetVec.length;
+      const stdev = Math.sqrt(variance);
+      notes.push(`Street profile: ${streetVec.map(x => `${x.n} ${(x.v * 100).toFixed(1)}%`).join(" | ")}.`);
+      notes.push(`Volatility metric (stdev): ${(stdev * 100).toFixed(1)} pts.`);
       function swing(from, to, streetName) {
         if (!from || !to) return;
         let bestI = 0;
@@ -1875,15 +1895,16 @@
       const heroNet = heroRiver - heroPre;
       if (heroNet <= -0.1 && !heroAllInStreet) {
         notes.push(`Leak signal: your equity fell ${Math.abs(heroNet * 100).toFixed(1)} points by river. Likely too wide continuation against stronger ranges.`);
-        notes.push("Adjustment: tighten flop/turn continue thresholds and prioritize nut-draw + redraw structures.");
+        advice.push("Adjustment: tighten flop/turn continue thresholds and prioritize nut-draw + redraw structures.");
       } else if (heroNet <= -0.1 && heroAllInStreet) {
         notes.push(`Variance note: you were all-in on ${heroAllInStreet}, then equity ran against you by ${Math.abs(heroNet * 100).toFixed(1)} points (possible suckout sequence).`);
+        advice.push("Adjustment: evaluate decision quality at all-in point (pot odds + equity), not final runout.");
       } else if (heroNet >= 0.1) {
         notes.push(`Strong realization: your line gained ${Math.abs(heroNet * 100).toFixed(1)} points from preflop to river.`);
-        notes.push("GTO-style takeaway: your line retained high-equity/nut-heavy branches while weaker combos dropped out.");
+        advice.push("GTO-style takeaway: your line retained high-equity/nut-heavy branches while weaker combos dropped out.");
       } else {
         notes.push("Near-GTO stability: your overall equity stayed relatively stable across streets.");
-        notes.push("Adjustment: choose lower-variance sizing lines in similar spots; edge likely comes from small frequency improvements.");
+        advice.push("Adjustment: choose lower-variance sizing lines in similar spots; edge likely comes from small frequency improvements.");
       }
       if (river) {
         const maxEq = Math.max(...river.equities);
@@ -1892,13 +1913,27 @@
         if (winners.length > 1) notes.push(`River finishes as chopped equity between ${winners.map(w => `P${w.i + 1}`).join(", ")}.`);
         else notes.push(`River winner by equity: P${winners[0].i + 1} (${(maxEq * 100).toFixed(1)}%).`);
         if (!heroWon && heroRiver < 0.2 && !heroAllInStreet) {
-          notes.push("Coach: line appears non-optimal for your seat in this tree; fold/call less and continue with stronger nut potential.");
+          advice.push("Coach: line appears non-optimal for your seat in this tree; fold/call less and continue with stronger nut potential.");
         } else if (heroWon && heroRiver > 0.5) {
-          notes.push("Coach: strong value-realization line for your seat; this is close to a GTO-favored outcome.");
+          advice.push("Coach: strong value-realization line for your seat; this is close to a GTO-favored outcome.");
         }
       }
+      const band = (x) => x >= 0.58 ? "value-heavy / pressure" : (x >= 0.42 ? "mixed / realization" : "defensive / fold-heavy");
+      advice.push(`Flop strategy band: ${band(heroFlop)}.`);
+      advice.push(`Turn strategy band: ${band(heroTurn)}.`);
+      const turnDrop = heroTurn - heroFlop;
+      if (turnDrop <= -0.12 && !heroAllInStreet) {
+        advice.push("Technical leak-check: large flop->turn equity drop; likely over-calling turn with non-nut structures.");
+      }
+      const preGap = heroPre - pre.equities[leaderIdx];
+      if (preGap <= -0.12) {
+        advice.push("Range note: significant preflop equity deficit vs table leader; prioritize nuttier 3-bet/call compositions.");
+      } else if (preGap >= 0.08) {
+        advice.push("Range note: preflop edge present; can support higher aggression frequencies when board interaction stays favorable.");
+      }
       if (notes.length < 2) notes.push("Action likely standard; no major equity swing detected.");
-      return notes.slice(0, 5);
+      if (!advice.length) advice.push("Adjustment: review flop/turn continue thresholds against stronger ranges.");
+      return [...notes.slice(0, 7), ...advice.slice(0, 4)];
     }
 
     function renderCoachForHero() {
