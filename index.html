@@ -366,13 +366,13 @@
 
     #preflopDrillPanel {
       position: relative;
-      display: grid;
-      gap: 10px;
-      grid-auto-rows: max-content;
+      padding: 16px;
     }
     .drill-wrap {
       position: relative;
-      padding-top: 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
     }
     .drill-score-corner {
       position: absolute;
@@ -391,42 +391,51 @@
       flex-wrap: wrap;
       align-items: center;
       gap: 10px 14px;
-      margin-bottom: 4px;
       padding-right: 120px;
     }
     .drill-head h2 {
       margin: 0;
       font-size: 0.96rem;
     }
-    .drill-position-row {
+    .drill-position-visual-row {
       display: flex;
       align-items: center;
-      gap: 12px;
-      flex-wrap: wrap;
+      gap: 24px;
+      padding: 8px 0;
+    }
+    .drill-position-visual-side {
+      flex: 1 1 0;
+      min-width: 0;
+    }
+    .drill-position-visual-side--left {
+      display: flex;
+      justify-content: flex-start;
     }
     .drill-table-svg-wrap {
-      display: inline-flex;
+      flex: 0 0 auto;
+      display: flex;
       align-items: center;
+      justify-content: center;
       line-height: 0;
     }
     .drill-table-svg-wrap svg {
-      display: inline-block;
-      vertical-align: middle;
-      margin-left: 12px;
-      margin-top: 0;
-      position: relative;
-      top: 0;
+      display: block;
     }
     .drill-position-badge {
       display: inline-flex;
       align-items: center;
-      padding: 5px 11px;
-      border-radius: 999px;
-      font-size: 0.8rem;
+      padding: 6px 14px;
+      border-radius: 0 10px 10px 0;
+      font-size: 0.88rem;
       font-weight: 700;
       color: #e8f6ef;
-      background: linear-gradient(180deg, rgba(56, 211, 159, 0.22), rgba(56, 211, 159, 0.08));
-      border: 1px solid rgba(56, 211, 159, 0.35);
+      background: rgba(56, 211, 159, 0.1);
+      border: none;
+      border-left: 3px solid #38d39f;
+    }
+    #preflopDrillPanel .drill-cards-row {
+      margin-top: 16px;
+      margin-bottom: 16px;
     }
     .drill-cards-row {
       display: flex;
@@ -456,16 +465,28 @@
       display: flex;
       flex-wrap: wrap;
       gap: 10px;
-      margin-top: 4px;
+      margin-top: 0;
+    }
+    .shortcut-flash {
+      filter: brightness(1.4);
+      transition: filter 0.15s;
+    }
+    .drill-key-hint {
+      font-size: 0.72rem;
+      color: rgba(255, 255, 255, 0.35);
+      text-align: center;
+      margin: 6px 0 0;
     }
     button.drill-big-btn {
       flex: 1 1 140px;
       min-width: 120px;
+      height: 52px;
       padding: 14px 22px;
-      font-size: 1.05rem;
+      font-size: 1rem;
       font-weight: 800;
       letter-spacing: 0.04em;
       border-radius: 12px;
+      box-sizing: border-box;
     }
     button.drill-big-btn.drill-open {
       color: #05150f;
@@ -478,8 +499,8 @@
       border: 1px solid rgba(255, 255, 255, 0.14);
     }
     .drill-verdict {
-      margin-top: 8px;
-      padding: 10px 12px;
+      margin-top: 16px;
+      padding: 14px;
       border-radius: 12px;
       background: rgba(0, 0, 0, 0.38);
       border: 1px solid rgba(255, 255, 255, 0.1);
@@ -860,10 +881,13 @@
         <div class="drill-score-corner" id="drillRunningScore">0/0 correct</div>
         <div class="drill-head">
           <h2>Preflop Drill</h2>
-          <div class="drill-position-row">
+        </div>
+        <div class="drill-position-visual-row">
+          <div class="drill-position-visual-side drill-position-visual-side--left">
             <div class="drill-position-badge" id="drillPositionBadge">You are CO</div>
-            <span class="drill-table-svg-wrap" id="drillTableDiagram" aria-hidden="true"></span>
           </div>
+          <div class="drill-table-svg-wrap" id="drillTableDiagram" aria-hidden="true"></div>
+          <div class="drill-position-visual-side drill-position-visual-side--right" aria-hidden="true"></div>
         </div>
         <div class="board-panel">
           <h2>Your hand</h2>
@@ -873,6 +897,7 @@
           <button type="button" class="drill-big-btn drill-open" id="drillOpenBtn">OPEN</button>
           <button type="button" class="drill-big-btn drill-fold" id="drillFoldBtn">FOLD</button>
         </div>
+        <p class="drill-key-hint">R = raise/open · F = fold · N or Space = next hand</p>
         <div class="drill-verdict hidden" id="drillVerdictPanel">
           <div class="drill-verdict-title" id="drillVerdictTitle">CORRECT ✓</div>
           <div class="drill-hand-score" id="drillHandScoreLine">Hand Score: 0/100</div>
@@ -1650,24 +1675,28 @@
     function renderDrillTableSvg(pos) {
       const acc = "#38d39f";
       const seats = [
-        { id: "UTG", cx: 46, cy: 106, lx: 46, ly: 124, anchor: "middle" },
-        { id: "HJ", cx: 20, cy: 58, lx: 14, ly: 62, anchor: "end" },
-        { id: "CO", cx: 62, cy: 20, lx: 62, ly: 11, anchor: "middle" },
-        { id: "BTN", cx: 138, cy: 20, lx: 138, ly: 11, anchor: "middle" },
-        { id: "SB", cx: 180, cy: 58, lx: 186, ly: 62, anchor: "start" },
-        { id: "BB", cx: 154, cy: 106, lx: 154, ly: 124, anchor: "middle" }
+        { id: "UTG", cx: 58, cy: 136, lx: 58, ly: 158, anchor: "middle" },
+        { id: "HJ", cx: 22, cy: 72, lx: 18, ly: 76, anchor: "end" },
+        { id: "CO", cx: 76, cy: 22, lx: 76, ly: 12, anchor: "middle" },
+        { id: "BTN", cx: 184, cy: 22, lx: 184, ly: 12, anchor: "middle" },
+        { id: "SB", cx: 238, cy: 72, lx: 256, ly: 76, anchor: "end" },
+        { id: "BB", cx: 202, cy: 136, lx: 202, ly: 158, anchor: "middle" }
       ];
       let circ = "";
       let lab = "";
+      let innerLab = "";
       for (const s of seats) {
         const act = s.id === pos && s.id !== "BB";
-        const r = act ? 13 : 9;
+        const r = act ? 14 : 10;
         const fl = act ? acc : "#2a4d42";
         const fi = act ? "filter=\"url(#glow)\"" : "";
         circ += `<circle cx="${s.cx}" cy="${s.cy}" r="${r}" fill="${fl}" ${fi}/>`;
-        lab += `<text x="${s.lx}" y="${s.ly}" text-anchor="${s.anchor}" font-size="10" font-family="inherit" fill="${act ? "#ffffff" : "rgba(255,255,255,0.5)"}">${s.id}</text>`;
+        lab += `<text x="${s.lx}" y="${s.ly}" text-anchor="${s.anchor}" font-size="11" font-family="inherit" font-weight="600" fill="${act ? "#ffffff" : "rgba(255,255,255,0.5)"}">${s.id}</text>`;
+        if (act) {
+          innerLab += `<text x="${s.cx}" y="${s.cy}" text-anchor="middle" dominant-baseline="central" font-size="8" font-family="inherit" font-weight="700" fill="#ffffff">${s.id}</text>`;
+        }
       }
-      return `<svg width="200" height="130" viewBox="0 0 200 130" xmlns="http://www.w3.org/2000/svg"><defs><filter id="glow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><ellipse cx="100" cy="65" rx="78" ry="48" fill="#1a4a38" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>${circ}${lab}</svg>`;
+      return `<svg width="260" height="170" viewBox="0 0 260 170" xmlns="http://www.w3.org/2000/svg"><defs><filter id="glow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><ellipse cx="130" cy="85" rx="104" ry="66" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="3"/><ellipse cx="130" cy="85" rx="100" ry="62" fill="#1a4a38" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>${circ}${lab}${innerLab}</svg>`;
     }
 
     function updatePreflopDrillPanel() {
@@ -3353,6 +3382,45 @@
     el.drillNextBtn.addEventListener("click", () => {
       dealPreflopDrillHand();
       updatePreflopDrillPanel();
+    });
+
+    function flashDrillShortcut(btn) {
+      if (!btn) return;
+      btn.classList.add("shortcut-flash");
+      setTimeout(() => btn.classList.remove("shortcut-flash"), 150);
+    }
+
+    document.addEventListener("keydown", (e) => {
+      if (el.preflopDrillPanel.classList.contains("hidden")) return;
+      const t = e.target;
+      const tag = t && t.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (e.repeat) return;
+
+      const verdictShowing = !el.drillVerdictPanel.classList.contains("hidden");
+      const nextAvailable = verdictShowing && !el.drillNextBtn.disabled;
+
+      if (e.key === " " || e.key.toLowerCase() === "n") {
+        if (!nextAvailable) return;
+        if (e.key === " ") e.preventDefault();
+        flashDrillShortcut(el.drillNextBtn);
+        dealPreflopDrillHand();
+        updatePreflopDrillPanel();
+        return;
+      }
+
+      if (e.key.toLowerCase() === "r") {
+        if (el.drillOpenBtn.disabled) return;
+        flashDrillShortcut(el.drillOpenBtn);
+        submitDrillAnswer("open");
+        return;
+      }
+      if (e.key.toLowerCase() === "f") {
+        if (el.drillFoldBtn.disabled) return;
+        flashDrillShortcut(el.drillFoldBtn);
+        submitDrillAnswer("fold");
+        return;
+      }
     });
     el.drillResetScoreBtn.addEventListener("click", () => {
       resetPreflopDrillRunningScore();
