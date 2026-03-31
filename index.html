@@ -359,8 +359,35 @@
       border-radius: 7px;
       padding: 4px 6px;
     }
+    .review-grid {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: 1fr 1fr;
+    }
+    .review-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px;
+      padding: 8px;
+      font-size: 0.82rem;
+      color: #e0efe8;
+    }
+    .review-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 5px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .review-row:last-child { border-bottom: none; }
+    .review-mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.78rem;
+      color: #cfe2da;
+    }
     @media (max-width: 900px) {
       .range-grid { grid-template-columns: 1fr; }
+      .review-grid { grid-template-columns: 1fr; }
     }
 
     .picker {
@@ -396,6 +423,7 @@
     <div class="tabs">
       <button class="tab-btn active" id="tabExact">Exact Hand vs Hand</button>
       <button class="tab-btn" id="tabRange">Range vs Range</button>
+      <button class="tab-btn" id="tabReview">PokerNow Review</button>
     </div>
 
     <div class="table" id="exactTabPanel">
@@ -515,6 +543,29 @@
         <div class="small-label" id="rangeResultLabel">Enter ranges, then run.</div>
       </div>
     </div>
+
+    <div class="table hidden" id="reviewTabPanel">
+      <div class="controls">
+        <label class="sim-config">PokerNow shared-hand URL or ID
+          <input id="reviewHandInput" type="text" placeholder="https://www.pokernow.com/hand-replayer/shared-hand/..." style="width: 360px;" />
+        </label>
+        <button class="primary" id="reviewAnalyzeBtn">Analyze Hand</button>
+      </div>
+      <div class="review-grid">
+        <div class="review-card">
+          <div><strong>Hand Summary</strong></div>
+          <div class="review-mono" id="reviewSummary">Paste a shared hand URL, then click Analyze Hand.</div>
+        </div>
+        <div class="review-card">
+          <div><strong>Players</strong></div>
+          <div class="review-mono" id="reviewPlayers">-</div>
+        </div>
+      </div>
+      <div class="board-panel">
+        <h2>Street Odds (P1 vs P2)</h2>
+        <div class="explorer-results" id="reviewStreetResults"></div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -548,9 +599,11 @@
       status: document.getElementById("status"),
       tabExact: document.getElementById("tabExact"),
       tabRange: document.getElementById("tabRange"),
+      tabReview: document.getElementById("tabReview"),
       exactTabPanel: document.getElementById("exactTabPanel"),
       exactPicker: document.getElementById("exactPicker"),
       rangeTabPanel: document.getElementById("rangeTabPanel"),
+      reviewTabPanel: document.getElementById("reviewTabPanel"),
       runBtn: document.getElementById("runBtn"),
       exploreRunoutsBtn: document.getElementById("exploreRunoutsBtn"),
       randomFlopBtn: document.getElementById("randomFlopBtn"),
@@ -579,7 +632,12 @@
       rangeMaxTimeInput: document.getElementById("rangeMaxTimeInput"),
       runRangeBtn: document.getElementById("runRangeBtn"),
       clearRangeBtn: document.getElementById("clearRangeBtn"),
-      rangeResultLabel: document.getElementById("rangeResultLabel")
+      rangeResultLabel: document.getElementById("rangeResultLabel"),
+      reviewHandInput: document.getElementById("reviewHandInput"),
+      reviewAnalyzeBtn: document.getElementById("reviewAnalyzeBtn"),
+      reviewSummary: document.getElementById("reviewSummary"),
+      reviewPlayers: document.getElementById("reviewPlayers"),
+      reviewStreetResults: document.getElementById("reviewStreetResults")
     };
 
     function fullDeck() {
@@ -1350,6 +1408,83 @@
       return `${card[0]}${suit.symbol}`;
     }
 
+    function parsePokerNowSharedHandId(input) {
+      const text = (input || "").trim();
+      if (!text) return null;
+      const direct = text.match(/^[a-z0-9_-]{6,}$/i);
+      if (direct) return direct[0];
+      const urlMatch = text.match(/shared-hand\/([a-z0-9_-]+)/i);
+      return urlMatch ? urlMatch[1] : null;
+    }
+
+    function makeBoardFromCards(cards) {
+      const b = [null, null, null, null, null];
+      for (let i = 0; i < Math.min(5, cards.length); i++) b[i] = cards[i];
+      return b;
+    }
+
+    function extractReviewPlayers(data) {
+      const revealMap = new Map();
+      for (const ev of data.events || []) {
+        const p = ev.payload || {};
+        if (p.type === 12 && p.seat && Array.isArray(p.cards) && p.cards.length === 4) {
+          if (!revealMap.has(p.seat)) revealMap.set(p.seat, p.cards);
+        }
+      }
+      const entries = [...revealMap.entries()].slice(0, 2);
+      if (entries.length < 2) {
+        const fromPlayers = (data.players || []).filter(pl => Array.isArray(pl.hand) && pl.hand.length === 4).slice(0, 2);
+        if (fromPlayers.length === 2) {
+          return [
+            { seat: fromPlayers[0].seat, name: fromPlayers[0].name || `Seat ${fromPlayers[0].seat}`, cards: fromPlayers[0].hand },
+            { seat: fromPlayers[1].seat, name: fromPlayers[1].name || `Seat ${fromPlayers[1].seat}`, cards: fromPlayers[1].hand }
+          ];
+        }
+        return null;
+      }
+      return entries.map(([seat, cards]) => {
+        const pl = (data.players || []).find(x => x.seat === seat);
+        return { seat, name: pl?.name || `Seat ${seat}`, cards };
+      });
+    }
+
+    function extractRun1Boards(data) {
+      const run1 = (data.events || [])
+        .map(e => e.payload || {})
+        .filter(p => p.type === 9 && p.run === 1);
+      const flopEvt = run1.find(p => p.turn === 1 && Array.isArray(p.cards) && p.cards.length >= 3);
+      const turnEvt = run1.find(p => p.turn === 2 && Array.isArray(p.cards) && p.cards.length >= 1);
+      const riverEvt = run1.find(p => p.turn === 3 && Array.isArray(p.cards) && p.cards.length >= 1);
+      if (!flopEvt) return null;
+      const flop = flopEvt.cards.slice(0, 3);
+      const turn = turnEvt ? [...flop, turnEvt.cards[0]] : flop.slice();
+      const river = riverEvt ? [...turn, riverEvt.cards[0]] : turn.slice();
+      return { flop, turn, river };
+    }
+
+    async function analyzePokerNowSharedHand(handId) {
+      const res = await fetch(`https://media.pokernow.com/shared-hands/${handId}.json`);
+      if (!res.ok) throw new Error(`Unable to fetch hand (${res.status})`);
+      const data = await res.json();
+      const players = extractReviewPlayers(data);
+      if (!players) throw new Error("Could not locate two revealed 4-card hands in this hand.");
+      const boards = extractRun1Boards(data);
+      const streets = [{ name: "Preflop", cards: [] }];
+      if (boards?.flop?.length >= 3) streets.push({ name: "Flop", cards: boards.flop });
+      if (boards?.turn?.length >= 4) streets.push({ name: "Turn", cards: boards.turn });
+      if (boards?.river?.length >= 5) streets.push({ name: "River", cards: boards.river });
+
+      const settings = { maxTrials: 80000, minTrials: 10000, maxMs: 2500, targetCi: 0.005 };
+      const results = [];
+      for (const st of streets) {
+        const board = makeBoardFromCards(st.cards);
+        const r = await runMonteCarloForHandsAsync(players[0].cards, players[1].cards, board, settings);
+        if (r.error) throw new Error(r.error);
+        results.push({ street: st.name, board: st.cards, ...r });
+      }
+      return { data, players, results };
+    }
+
     function runoutExplorer() {
       el.explorerResults.innerHTML = "";
       const boardKnown = state.board.filter(Boolean);
@@ -1436,12 +1571,17 @@
 
     function renderTabs() {
       const isExact = state.tab === "exact";
+      const isRange = state.tab === "range";
+      const isReview = state.tab === "review";
       el.tabExact.classList.toggle("active", isExact);
-      el.tabRange.classList.toggle("active", !isExact);
+      el.tabRange.classList.toggle("active", isRange);
+      el.tabReview.classList.toggle("active", isReview);
       el.exactTabPanel.classList.toggle("hidden", !isExact);
       el.exactPicker.classList.toggle("hidden", !isExact);
-      el.rangeTabPanel.classList.toggle("hidden", isExact);
-      if (!isExact) el.status.textContent = "Range mode: enter ranges and run simulation.";
+      el.rangeTabPanel.classList.toggle("hidden", !isRange);
+      el.reviewTabPanel.classList.toggle("hidden", !isReview);
+      if (isRange) el.status.textContent = "Range mode: enter ranges and run simulation.";
+      if (isReview) el.status.textContent = "PokerNow Review: analyze a shared hand URL.";
     }
 
     function refreshPrecisionInputs() {
@@ -1546,6 +1686,11 @@
       render();
     });
 
+    el.tabReview.addEventListener("click", () => {
+      state.tab = "review";
+      render();
+    });
+
     el.runRangeBtn.addEventListener("click", async () => {
       cancelActiveJobs();
       const jobId = state.activeJobId;
@@ -1613,6 +1758,40 @@
     el.rangeMaxTimeInput.addEventListener("change", () => {
       getMaxTimeMs(el.rangeMaxTimeInput);
       syncUrlStateSoon();
+    });
+
+    el.reviewAnalyzeBtn.addEventListener("click", async () => {
+      cancelActiveJobs();
+      const handId = parsePokerNowSharedHandId(el.reviewHandInput.value);
+      if (!handId) {
+        el.reviewSummary.textContent = "Enter a valid PokerNow shared-hand URL or hand ID.";
+        return;
+      }
+      el.status.textContent = "Fetching PokerNow hand and computing street odds...";
+      el.reviewStreetResults.innerHTML = "";
+      try {
+        const review = await analyzePokerNowSharedHand(handId);
+        const p1 = review.players[0];
+        const p2 = review.players[1];
+        el.reviewSummary.textContent = `Hand #${review.data.number || "?"} | Blinds ${review.data.smallBlind}/${review.data.bigBlind} | Source run: #1`;
+        el.reviewPlayers.textContent =
+          `P1 ${p1.name} (${p1.cards.map(cardToPretty).join(" ")}) vs P2 ${p2.name} (${p2.cards.map(cardToPretty).join(" ")})`;
+
+        for (const row of review.results) {
+          const div = document.createElement("div");
+          div.className = "review-row";
+          const boardTxt = row.board.length ? row.board.map(cardToPretty).join(" ") : "-";
+          const reasonMap = { "exact": "exact", "target-ci": "target CI", "time-cap": "time cap", "max-trials": "max trials" };
+          div.innerHTML =
+            `<span>${row.street} | Board: ${boardTxt}</span>` +
+            `<span>P1 ${(row.p1Eq * 100).toFixed(2)}% | Tie ${(row.tiePct * 100).toFixed(2)}% | P2 ${(row.p2Eq * 100).toFixed(2)}% | CI +/-${(row.ci95 * 100).toFixed(2)}% (${reasonMap[row.stopReason] || "done"})</span>`;
+          el.reviewStreetResults.appendChild(div);
+        }
+        el.status.textContent = "PokerNow review complete.";
+      } catch (err) {
+        el.reviewSummary.textContent = `Analysis failed: ${err.message}`;
+        el.status.textContent = `Review error: ${err.message}`;
+      }
     });
 
     loadStateFromUrl();
