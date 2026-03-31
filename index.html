@@ -1812,6 +1812,52 @@
       return timeline;
     }
 
+    function buildCompactTimelineView(timeline, review) {
+      const key = [];
+      const preAction = timeline.filter(t =>
+        t.label.includes("posts blind") || t.label.includes("calls") || t.label.includes("bets/raises")
+      );
+      const boardRows = timeline.filter(t => t.label.startsWith("Board "));
+      const wins = timeline.filter(t => t.label.includes(" wins "));
+      key.push(...preAction.slice(0, 4));
+
+      // Force canonical board sequence: Flop -> Turn 1 -> River 1 -> Turn 2 -> River 2 ...
+      const boardMap = new Map();
+      for (const row of boardRows) {
+        const m = row.label.match(/^Board (Flop|Turn|River)(?: \(Run (\d+)\))?:/);
+        if (!m) continue;
+        const street = m[1];
+        const run = m[2] ? Number(m[2]) : 0;
+        boardMap.set(`${street}|${run}`, row);
+      }
+      const forced = [];
+      const sharedFlop = boardMap.get("Flop|0");
+      if (sharedFlop) forced.push(sharedFlop);
+      const runs = (review?.runs || []).map(r => Number(r.run)).filter(Number.isFinite).sort((a, b) => a - b);
+      if (runs.length) {
+        for (const run of runs) {
+          const turn = boardMap.get(`Turn|${run}`);
+          const river = boardMap.get(`River|${run}`);
+          if (turn) forced.push(turn);
+          if (river) forced.push(river);
+        }
+      } else {
+        for (const row of boardRows) forced.push(row);
+      }
+      key.push(...forced);
+      key.push(...wins.slice(-Math.max(2, runs.length || 1)));
+
+      const dedup = [];
+      const seen = new Set();
+      for (const row of key) {
+        const k = `${row.label}|${row.pot}`;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        dedup.push(row);
+      }
+      return dedup;
+    }
+
     function compactTimelineItems(timeline) {
       const keep = [];
       for (const t of timeline) {
@@ -1868,7 +1914,6 @@
       const heroPre = pre.equities[heroIdx] || 0;
       const heroAllInStreet = detectHeroAllInStreet(review, heroIdx);
       notes.push(`You are ${heroName} (P${heroIdx + 1}).`);
-      notes.push(`Preflop equity ${(heroPre * 100).toFixed(1)}% | Table favorite P${leaderIdx + 1} at ${(pre.equities[leaderIdx] * 100).toFixed(1)}%.`);
       function swing(from, to, streetName) {
         if (!from || !to) return;
         let bestI = 0;
@@ -1892,12 +1937,13 @@
       const heroTurn = turn ? turn.equities[heroIdx] : heroFlop;
       const heroRiver = river ? river.equities[heroIdx] : heroTurn;
       const heroNet = heroRiver - heroPre;
+      const headline = [];
       const verdict =
         heroAllInStreet && heroNet < -0.1 ? "VERDICT: Mostly variance (you were all-in before runout)." :
         (!heroAllInStreet && heroNet < -0.1 ? "VERDICT: Likely leak in continue strategy." :
         (heroNet > 0.1 ? "VERDICT: Good line and strong realization." : "VERDICT: Close to neutral / mixed."));
-      notes.push(verdict);
-      notes.push(`Street profile: Pre ${(heroPre * 100).toFixed(1)}% -> Flop ${(heroFlop * 100).toFixed(1)}% -> Turn ${(heroTurn * 100).toFixed(1)}% -> River ${(heroRiver * 100).toFixed(1)}%.`);
+      headline.push(verdict);
+      headline.push(`Actionable summary: Pre ${(heroPre * 100).toFixed(1)} -> Flop ${(heroFlop * 100).toFixed(1)} -> Turn ${(heroTurn * 100).toFixed(1)} -> River ${(heroRiver * 100).toFixed(1)}.`);
       if (river) {
         const maxEq = Math.max(...river.equities);
         const winners = river.equities.map((v, i) => ({ v, i })).filter(x => Math.abs(x.v - maxEq) < 1e-9);
@@ -1905,23 +1951,25 @@
         if (winners.length > 1) notes.push(`River finishes as chopped equity between ${winners.map(w => `P${w.i + 1}`).join(", ")}.`);
         else notes.push(`River winner by equity: P${winners[0].i + 1} (${(maxEq * 100).toFixed(1)}%).`);
         if (!heroWon && heroRiver < 0.2 && !heroAllInStreet) {
-          notes.push("Actionable: fold/call less vs this line; continue with stronger nut potential + redraws.");
+          headline.push("Actionable: fold/call less vs this line; continue with stronger nut potential + redraws.");
         } else if (heroWon && heroRiver > 0.5) {
-          notes.push("Actionable: keep this aggression pattern; it matches a high-EV value-realization line.");
+          headline.push("Actionable: keep this aggression pattern; it matches a high-EV value-realization line.");
         }
       }
       const band = (x) => x >= 0.58 ? "pressure/value-heavy" : (x >= 0.42 ? "mixed realization" : "defensive / fold-heavy");
-      notes.push(`Flop band: ${band(heroFlop)} | Turn band: ${band(heroTurn)}.`);
+      headline.push(`Flop band: ${band(heroFlop)} | Turn band: ${band(heroTurn)}.`);
       const turnDrop = heroTurn - heroFlop;
       if (turnDrop <= -0.12 && !heroAllInStreet) {
-        notes.push("Leak check: large flop->turn equity drop; likely over-calling turn with non-nut structures.");
+        headline.push("Leak check: large flop->turn equity drop; likely over-calling turn with non-nut structures.");
       }
       const preGap = heroPre - pre.equities[leaderIdx];
       if (preGap <= -0.12) {
-        notes.push("Range note: preflop equity deficit vs leader; tighten preflop continues and bias to nuttier structures.");
+        headline.push("Range note: preflop equity deficit vs leader; tighten preflop continues and bias to nuttier structures.");
       } else if (preGap >= 0.08) {
-        notes.push("Range note: preflop edge present; support higher aggression frequencies on favorable board interaction.");
+        headline.push("Range note: preflop edge present; support higher aggression frequencies on favorable board interaction.");
       }
+      notes.push(...headline);
+      notes.push(`Reference: table preflop favorite P${leaderIdx + 1} at ${(pre.equities[leaderIdx] * 100).toFixed(1)}%.`);
       if (notes.length < 2) notes.push("Action likely standard; no major equity swing detected.");
       return notes;
     }
@@ -2368,12 +2416,14 @@
           el.reviewStreetResults.appendChild(header);
           const rows = grouped.get(key);
           for (const row of rows) {
+            if (key > 0 && row.street === "Flop" && review.runs.length > 1) continue;
             const div = document.createElement("div");
             div.className = "review-row";
             const boardTxt = row.board.length ? row.board.map(cardToPretty).join(" ") : "-";
             const eqTxt = review.players.map((p, i) => `P${i + 1} ${(row.equities[i] * 100).toFixed(2)}%`).join(" | ");
+            const streetLabel = key > 0 ? `${row.street} ${key}` : row.street;
             div.innerHTML =
-              `<span>${row.street} | Board: ${boardTxt}</span>` +
+              `<span>${streetLabel} | Board: ${boardTxt}</span>` +
               `<span>${eqTxt} | Trials ${row.trials.toLocaleString()}</span>`;
             el.reviewStreetResults.appendChild(div);
           }
@@ -2391,13 +2441,14 @@
         }
 
         const timeline = parseTimelineEvents(review.data, review.players);
+        const timelineView = buildCompactTimelineView(timeline, review);
         if (!timeline.length) {
           const empty = document.createElement("div");
           empty.className = "timeline-item";
           empty.textContent = "No timeline events found.";
           el.reviewTimeline.appendChild(empty);
         } else {
-          for (const item of timeline) {
+          for (const item of timelineView) {
             const row = document.createElement("div");
             row.className = "timeline-item";
             row.innerHTML = `<span>${item.label}</span><span>Pot~ ${item.pot}</span>`;
