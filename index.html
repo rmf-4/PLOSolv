@@ -215,6 +215,9 @@
       padding: 5px 7px;
       font-weight: 600;
     }
+    #reviewHandInput {
+      width: min(560px, 62vw);
+    }
 
     button, .pill {
       border: none;
@@ -267,6 +270,9 @@
       color: #d7e6de;
       font-size: 0.82rem;
       min-height: 1.2rem;
+      max-width: 52ch;
+      text-align: right;
+      overflow-wrap: anywhere;
     }
     .helper {
       color: #b9cbc3;
@@ -288,15 +294,6 @@
     }
     .pill.active { background: #3a5d4f; border-color: rgba(255,255,255,0.24); }
 
-    @media (max-width: 720px) {
-      body { height: auto; overflow: auto; padding: 10px; }
-      .app { height: auto; grid-template-rows: none; }
-      .table, .picker { overflow: visible; }
-      .slot, .card { width: 50px; height: 70px; }
-      .picker-grid { gap: 5px; }
-      .pick-card { font-size: 0.78rem; padding: 4px 2px; }
-    }
-
     .table, .picker {
       overflow: hidden;
     }
@@ -304,6 +301,7 @@
     .tabs {
       display: flex;
       gap: 6px;
+      flex-wrap: wrap;
     }
     .tab-btn {
       border: 1px solid rgba(255,255,255,0.12);
@@ -424,6 +422,35 @@
       .card .rank { font-size: 0.82rem; }
       .card .suit { font-size: 0.78rem; }
       .pick-card { font-size: 0.68rem; padding: 2px 1px; }
+    }
+
+    @media (max-width: 720px) {
+      body { height: auto; overflow: auto; padding: 10px; }
+      .app { height: auto; grid-template-rows: none; }
+      .table, .picker { overflow: visible; }
+      .header { padding: 10px; }
+      .status { max-width: 100%; text-align: left; }
+      .tabs { gap: 8px; }
+      .tab-btn { flex: 1 1 30%; min-width: 120px; text-align: center; }
+      .controls { gap: 8px; }
+      .controls .spacer { display: none; }
+      .sim-config {
+        width: 100%;
+        justify-content: space-between;
+      }
+      .sim-config input, .sim-config select {
+        width: 54%;
+        min-width: 120px;
+      }
+      #reviewHandInput { width: 100%; }
+      .slot, .card { width: 50px; height: 70px; }
+      .picker-grid { gap: 5px; }
+      .pick-card { font-size: 0.78rem; padding: 4px 2px; }
+      .review-row {
+        flex-direction: column;
+        gap: 3px;
+      }
+      .review-row span:last-child { font-size: 0.76rem; }
     }
   </style>
 </head>
@@ -564,7 +591,7 @@
     <div class="table hidden" id="reviewTabPanel">
       <div class="controls">
         <label class="sim-config">PokerNow shared-hand URL or ID
-          <input id="reviewHandInput" type="text" placeholder="https://www.pokernow.com/hand-replayer/shared-hand/..." style="width: 360px;" />
+          <input id="reviewHandInput" type="text" placeholder="https://www.pokernow.com/hand-replayer/shared-hand/..." />
         </label>
         <button class="primary" id="reviewAnalyzeBtn">Analyze Hand</button>
       </div>
