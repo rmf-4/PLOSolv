@@ -362,6 +362,7 @@
       gap: 8px;
       grid-template-columns: 1fr 1fr;
       align-items: start;
+      grid-auto-rows: minmax(0, 1fr);
     }
     .review-card {
       background: rgba(255,255,255,0.03);
@@ -371,6 +372,9 @@
       font-size: 0.82rem;
       color: #e0efe8;
       min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
     .review-players-grid {
       display: grid;
@@ -405,7 +409,9 @@
     .timeline-list {
       display: grid;
       gap: 4px;
-      max-height: 220px;
+      max-height: none;
+      min-height: 0;
+      flex: 1 1 auto;
       overflow-y: auto;
       overflow-x: hidden;
       overscroll-behavior: contain;
@@ -428,7 +434,9 @@
       gap: 5px;
       font-size: 0.8rem;
       color: #dcebe4;
-      max-height: 220px;
+      max-height: none;
+      min-height: 0;
+      flex: 1 1 auto;
       overflow-y: auto;
       overflow-x: hidden;
       overscroll-behavior: contain;
