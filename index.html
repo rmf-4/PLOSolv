@@ -403,8 +403,8 @@
     .timeline-list {
       display: grid;
       gap: 4px;
-      max-height: 150px;
-      overflow: auto;
+      max-height: none;
+      overflow: hidden;
       margin-top: 6px;
     }
     .timeline-item {
@@ -424,8 +424,8 @@
       gap: 5px;
       font-size: 0.8rem;
       color: #dcebe4;
-      max-height: 150px;
-      overflow: auto;
+      max-height: none;
+      overflow: hidden;
     }
     @media (max-width: 900px) {
       .range-grid { grid-template-columns: 1fr; }
@@ -1706,6 +1706,31 @@
       return timeline;
     }
 
+    function compactTimelineItems(timeline) {
+      const keep = [];
+      for (const t of timeline) {
+        const s = t.label;
+        if (s.includes("posts blind") || s.includes("calls") || s.includes("bets/raises") || s.includes("Board ") || s.includes(" wins ")) {
+          keep.push(t);
+        }
+      }
+      const boardRows = keep.filter(x => x.label.includes("Board "));
+      const actionRows = keep.filter(x => !x.label.includes("Board "));
+      const out = [];
+      for (const row of actionRows.slice(0, 4)) out.push(row);
+      for (const row of boardRows.slice(0, 4)) out.push(row);
+      for (const row of keep.filter(x => x.label.includes(" wins ")).slice(0, 2)) out.push(row);
+      const unique = [];
+      const seen = new Set();
+      for (const row of out) {
+        const key = `${row.label}|${row.pot}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        unique.push(row);
+      }
+      return unique.slice(0, 9);
+    }
+
     function detectHeroAllInStreet(review, heroIdx) {
       const heroSeat = review.players?.[heroIdx]?.seat;
       if (!heroSeat || !review.data?.events) return null;
@@ -1783,7 +1808,7 @@
         }
       }
       if (notes.length < 2) notes.push("Action likely standard; no major equity swing detected.");
-      return notes;
+      return notes.slice(0, 5);
     }
 
     function renderCoachForHero() {
@@ -1826,10 +1851,15 @@
       return runs;
     }
 
-    async function analyzePokerNowSharedHand(handId) {
+    async function analyzePokerNowSharedHand(handId, onProgress) {
+      const setProgress = (pct, label) => {
+        if (onProgress) onProgress(Math.max(0, Math.min(100, pct)), label);
+      };
+      setProgress(5, "Fetching hand data");
       const res = await fetch(`https://media.pokernow.com/shared-hands/${handId}.json`);
       if (!res.ok) throw new Error(`Unable to fetch hand (${res.status})`);
       const data = await res.json();
+      setProgress(15, "Parsing players and boards");
       const players = extractReviewPlayers(data);
       if (!players || players.length < 2) throw new Error("Need at least two revealed 4-card hands in this hand.");
       const settings = { maxTrials: 80000, minTrials: 10000, maxMs: 2500, targetCi: 0.005 };
@@ -1839,8 +1869,27 @@
       // Preflop is identical across all runouts; solve once and reuse.
       const preflop = runEquityForManyHands(players, makeBoardFromCards([]), settings);
       if (preflop.error) throw new Error(preflop.error);
+      setProgress(30, "Preflop solved");
+      let totalStreetJobs = 0;
+      if (!runs.length) {
+        totalStreetJobs = 1;
+      } else {
+        for (const runData of runs) {
+          if (runData.flop?.length >= 3) totalStreetJobs++;
+          if (runData.turn?.length >= 4) totalStreetJobs++;
+          if (runData.river?.length >= 5) totalStreetJobs++;
+        }
+      }
+      let completedStreetJobs = 0;
+      const progressFromStreetWork = () => {
+        const frac = totalStreetJobs ? (completedStreetJobs / totalStreetJobs) : 1;
+        const pct = 30 + Math.round(frac * 60);
+        setProgress(pct, "Computing street odds");
+      };
       if (!runs.length) {
         allResults.push({ run: null, street: "Preflop", board: [], ...preflop });
+        completedStreetJobs++;
+        progressFromStreetWork();
       } else {
         allResults.push({ run: 0, street: "Preflop", board: [], ...preflop });
         for (const runData of runs) {
@@ -1853,9 +1902,12 @@
             const r = runEquityForManyHands(players, board, settings);
             if (r.error) throw new Error(r.error);
             allResults.push({ run: runData.run, street: st.name, board: st.cards, ...r });
+            completedStreetJobs++;
+            progressFromStreetWork();
           }
         }
       }
+      setProgress(100, "Finalizing");
       return { data, players, runs, results: allResults };
     }
 
@@ -2160,10 +2212,12 @@
         el.reviewSummary.textContent = "Enter a valid PokerNow shared-hand URL or hand ID.";
         return;
       }
-      el.status.textContent = "Fetching PokerNow hand and computing street odds...";
+      el.status.textContent = "Analyzing hand... 0%";
       el.reviewStreetResults.innerHTML = "";
       try {
-        const review = await analyzePokerNowSharedHand(handId);
+        const review = await analyzePokerNowSharedHand(handId, (pct, stage) => {
+          el.status.textContent = `Analyzing hand... ${pct}% (${stage})`;
+        });
         const runTxt = review.runs.length ? `Runs: ${review.runs.map(r => `#${r.run}`).join(", ")}` : "Runs: not detected";
         el.reviewSummary.textContent = `Hand #${review.data.number || "?"} | Blinds ${review.data.smallBlind}/${review.data.bigBlind} | ${runTxt}`;
         el.reviewPlayers.textContent = `Players involved (${review.players.length}): ${review.players.map(p => p.name).join(", ")}`;
@@ -2228,14 +2282,14 @@
           }
         }
 
-        const timeline = parseTimelineEvents(review.data, review.players);
+        const timeline = compactTimelineItems(parseTimelineEvents(review.data, review.players));
         if (!timeline.length) {
           const empty = document.createElement("div");
           empty.className = "timeline-item";
           empty.textContent = "No timeline events found.";
           el.reviewTimeline.appendChild(empty);
         } else {
-          for (const item of timeline.slice(0, 140)) {
+          for (const item of timeline) {
             const row = document.createElement("div");
             row.className = "timeline-item";
             row.innerHTML = `<span>${item.label}</span><span>Pot~ ${item.pot}</span>`;
@@ -2245,7 +2299,7 @@
 
         renderCoachForHero();
 
-        el.status.textContent = "PokerNow review complete.";
+        el.status.textContent = "PokerNow review complete. 100%";
       } catch (err) {
         el.reviewSummary.textContent = `Analysis failed: ${err.message}`;
         state.lastReview = null;
