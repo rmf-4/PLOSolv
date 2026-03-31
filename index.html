@@ -40,7 +40,7 @@
       max-width: 1280px;
       margin: 0 auto;
       display: grid;
-      gap: 2px;
+      gap: 0;
       min-height: calc(100dvh - 20px);
       height: auto;
       grid-template-rows: auto auto auto;
@@ -509,7 +509,7 @@
     <div class="header">
       <div>
         <h1 id="appTitle">Ghostmoney's PLO4 Hand Equity Visualizer</h1>
-        <div class="helper">Tap a slot, then tap a card. Tap a filled slot again to clear it.</div>
+        <div class="helper" id="tabHelper">Tap a slot, then tap a card. Tap a filled slot again to clear it.</div>
       </div>
       <div class="status" id="status">Select cards and click "Run It Out".</div>
     </div>
@@ -750,6 +750,7 @@
       pickerGrid: document.getElementById("pickerGrid"),
       targetBar: document.getElementById("targetBar"),
       status: document.getElementById("status"),
+      tabHelper: document.getElementById("tabHelper"),
       tabExact: document.getElementById("tabExact"),
       tabRange: document.getElementById("tabRange"),
       tabReview: document.getElementById("tabReview"),
@@ -2218,6 +2219,8 @@
       el.exactPicker.classList.toggle("hidden", !isExact);
       el.rangeTabPanel.classList.toggle("hidden", !isRange);
       el.reviewTabPanel.classList.toggle("hidden", !isReview);
+      if (isExact) el.tabHelper.classList.remove("hidden");
+      else el.tabHelper.classList.add("hidden");
       if (isRange) el.status.textContent = "Range mode: enter ranges and run simulation.";
       if (isReview) el.status.textContent = "PokerNow Review: analyze a shared hand URL.";
     }
