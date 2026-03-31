@@ -960,7 +960,7 @@
       return 0;
     }
 
-    async function runMonteCarloForHandsAsync(p1, p2, knownBoard, trials, onProgress, shouldContinue) {
+    async function runMonteCarloForHandsAsync(p1, p2, knownBoard, trials, onProgress, shouldContinue, maxMs) {
       const knownCount = knownBoard.filter(Boolean).length;
       if (knownCount >= 2) return runMonteCarloForHands(p1, p2, knownBoard, trials);
       const used = new Set([...p1, ...p2, ...knownBoard.filter(Boolean)]);
@@ -971,10 +971,12 @@
       const deckLen = deck.length;
 
       let p1w = 0, p2w = 0, ties = 0, done = 0;
+      const deadline = maxMs ? (performance.now() + maxMs) : Infinity;
       while (done < trials) {
         const started = performance.now();
         while (done < trials && (performance.now() - started) < 14) {
           if (shouldContinue && !shouldContinue()) return { error: "Simulation cancelled." };
+          if (performance.now() >= deadline) break;
           const board = knownBoard.slice();
           const picks = sampleUniqueIndices(deckLen, missingCount);
           for (let i = 0; i < missingCount; i++) board[missingIdx[i]] = deck[picks[i]];
@@ -986,11 +988,19 @@
           else ties++;
           done++;
         }
+        if (performance.now() >= deadline) break;
         if (onProgress) onProgress(done / trials);
         await new Promise(r => setTimeout(r, 0));
       }
-      const eq = equityFromCounts(p1w, p2w, ties, trials);
-      return { trials, p1w, p2w, ties, p1Eq: eq.p1Eq, p2Eq: eq.p2Eq, tiePct: eq.tiePct, ci95: eq.ci95 };
+      if (done === 0) return { error: "Simulation timed out before sampling." };
+      const eq = equityFromCounts(p1w, p2w, ties, done);
+      return {
+        trials: done,
+        requestedTrials: trials,
+        timedOut: done < trials,
+        p1w, p2w, ties,
+        p1Eq: eq.p1Eq, p2Eq: eq.p2Eq, tiePct: eq.tiePct, ci95: eq.ci95
+      };
     }
 
     function runMonteCarlo(trials) {
@@ -1326,7 +1336,8 @@
           const pct = Math.floor(progress * 100);
           el.status.textContent = `Running ${trials.toLocaleString()} simulations... ${pct}%`;
         },
-        () => state.activeJobId === jobId
+        () => state.activeJobId === jobId,
+        9500
       );
       if (result.error) {
         el.status.textContent = result.error;
@@ -1336,7 +1347,9 @@
       await animateRunoutResult(result);
       const ciPct = (result.ci95 * 100).toFixed(2);
       const exactTag = result.trials <= 44 ? " (exact)" : "";
-      el.status.textContent = `P1 Wins: ${result.p1w} | P2 Wins: ${result.p2w} | Ties: ${result.ties} | CI95: +/-${ciPct}%${exactTag}`;
+      const sampled = `${result.trials.toLocaleString()}/${(result.requestedTrials || result.trials).toLocaleString()}`;
+      const timeoutTag = result.timedOut ? " (time-capped <10s)" : "";
+      el.status.textContent = `P1 Wins: ${result.p1w} | P2 Wins: ${result.p2w} | Ties: ${result.ties} | Trials: ${sampled} | CI95: +/-${ciPct}%${exactTag}${timeoutTag}`;
       refreshActionState();
     });
 
