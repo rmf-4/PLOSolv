@@ -39,30 +39,40 @@
     .app {
       max-width: 1280px;
       margin: 0 auto;
-      display: grid;
-      gap: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 2px;
       min-height: 0;
-      height: auto;
-      grid-template-rows: auto auto auto;
-      align-content: start;
+      width: 100%;
+    }
+
+    .app > * {
+      flex: 0 0 auto;
     }
 
     .header {
       background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
       border: 1px solid rgba(255,255,255,0.08);
       border-radius: 14px;
-      padding: 6px 12px;
+      padding: 5px 11px;
       box-shadow: var(--shadow);
       display: flex;
       justify-content: space-between;
-      align-items: center;
-      gap: 12px;
+      align-items: flex-start;
+      gap: 10px 14px;
       flex-wrap: wrap;
+    }
+
+    .header-main {
+      flex: 1 1 220px;
+      min-width: 0;
     }
 
     h1 {
       margin: 0;
-      font-size: clamp(1.05rem, 1.6vw, 1.45rem);
+      font-size: clamp(0.98rem, 1.45vw, 1.28rem);
+      line-height: 1.2;
       letter-spacing: 0.2px;
     }
 
@@ -338,6 +348,13 @@
       background: #2a4d40;
       border-color: rgba(255,255,255,0.24);
     }
+    .tab-btn:focus {
+      outline: none;
+    }
+    .tab-btn:focus-visible {
+      outline: 2px solid rgba(56, 211, 159, 0.75);
+      outline-offset: 2px;
+    }
     .hidden { display: none !important; }
 
     .range-grid {
@@ -476,7 +493,7 @@
 
     @media (max-width: 720px) {
       body { height: auto; overflow: auto; padding: 10px; }
-      .app { height: auto; grid-template-rows: none; }
+      .app { height: auto; }
       .table, .picker { overflow: visible; }
       #reviewTabPanel { overflow: visible; padding-right: 0; }
       .header { padding: 6px 10px; }
@@ -508,7 +525,7 @@
 <body>
   <div class="app">
     <div class="header">
-      <div>
+      <div class="header-main">
         <h1 id="appTitle">Ghostmoney's PLO4 Hand Equity Visualizer</h1>
         <div class="helper" id="tabHelper">Tap a slot, then tap a card. Tap a filled slot again to clear it.</div>
       </div>
