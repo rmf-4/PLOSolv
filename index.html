@@ -1998,237 +1998,107 @@
     }
 
     function buildCoachNotes(review, heroIdx) {
-      const run1 = review.results.filter(r => normalizeReviewRunKey(r.run) === 1);
       const pre = review.results.find(r => r.street === "Preflop");
+      if (!pre) return "No preflop equity data available.";
+      const run1 = review.results.filter(r => normalizeReviewRunKey(r.run) === 1);
       const flop = run1.find(r => r.street === "Flop");
       const flopCombined = review.results.find(r => normalizeReviewRunKey(r.run) === 0 && r.street === "Flop");
       const turn = run1.find(r => r.street === "Turn");
       const river = run1.find(r => r.street === "River");
-      if (!pre) return "No preflop equity data available.";
 
-      const leaderIdx = pre.equities.indexOf(Math.max(...pre.equities));
       const heroName = review.players[heroIdx]?.name || `P${heroIdx + 1}`;
+      const heroSeat = review.players?.[heroIdx]?.seat;
       const heroPre = pre.equities[heroIdx] || 0;
-      const heroAllInStreet = detectHeroAllInStreet(review, heroIdx);
-      const preflopAllIn = heroAllInStreet === "Preflop";
-      const flopAllIn = heroAllInStreet === "Flop";
-      const turnAllIn = heroAllInStreet === "Turn";
-      const riverAllIn = heroAllInStreet === "River";
-
       const flopRow = flopCombined || flop;
-      const heroFlop = flopRow ? flopRow.equities[heroIdx] : heroPre;
-      const heroTurn = turn ? turn.equities[heroIdx] : heroFlop;
-      const heroRiver = river ? river.equities[heroIdx] : heroTurn;
+      const heroFlop = flopRow ? (flopRow.equities[heroIdx] || heroPre) : heroPre;
+      const heroTurn = turn ? (turn.equities[heroIdx] || heroFlop) : heroFlop;
+      const heroRiver = river ? (river.equities[heroIdx] || heroTurn) : heroTurn;
       const heroNet = heroRiver - heroPre;
+      const heroAllInStreet = detectHeroAllInStreet(review, heroIdx);
 
-      let commitEq = heroPre;
-      if (preflopAllIn) commitEq = heroPre;
-      else if (flopAllIn) commitEq = heroFlop;
-      else if (turnAllIn) commitEq = heroTurn;
-      else if (riverAllIn) commitEq = heroRiver;
+      let commitEq = null;
+      if (heroAllInStreet === "Preflop") commitEq = heroPre;
+      else if (heroAllInStreet === "Flop") commitEq = heroFlop;
+      else if (heroAllInStreet === "Turn") commitEq = heroTurn;
+      else if (heroAllInStreet === "River") commitEq = heroRiver;
 
       const heroShowdown = detectHeroShowdownResult(review, heroIdx);
-      const heroWonShowdown = heroShowdown.won;
-
-      const band = (x) =>
-        x >= 0.58 ? "pressure- and value-heavy" : (x >= 0.42 ? "mixed-realization" : "defensive and fold-heavy");
-
-      const sentences = [];
-      sentences.push(`I'm coaching this from ${heroName}'s seat (P${heroIdx + 1}).`);
-
-      if (!heroAllInStreet) {
-        sentences.push(
-          `You had chips behind as the board ran out, so the street-by-street profile and how the river lands both matter for whether I like the line.`
-        );
-        if (flopRow) {
-          const d = (flopRow.equities[heroIdx] - pre.equities[heroIdx]) * 100;
-          if (Math.abs(d) >= 5) {
-            sentences.push(
-              `On the flop your equity ${d > 0 ? "jumped" : "dropped"} by about ${Math.abs(d).toFixed(1)} points versus this lineup.`
-            );
-          }
+      let foldCount = 0;
+      let heroFolded = false;
+      let hasPayout = false;
+      for (const ev of review.data?.events || []) {
+        const p = ev.payload || {};
+        if (p.type === 11) {
+          foldCount += 1;
+          if (heroSeat != null && String(p.seat) === String(heroSeat)) heroFolded = true;
         }
-        if (turn && flopRow) {
-          const d = (turn.equities[heroIdx] - flopRow.equities[heroIdx]) * 100;
-          if (Math.abs(d) >= 8) {
-            sentences.push(
-              `The turn moved you another ~${Math.abs(d).toFixed(1)} points ${d > 0 ? "forward" : "backward"}.`
-            );
-          }
-        }
-      } else if (preflopAllIn) {
-        sentences.push(
-          `You were all-in preflop, so postflop is pure distribution — the live question is whether that pre-commit was right, not how you "play" the runout.`
-        );
-        if (flopRow) {
-          const d = (flopRow.equities[heroIdx] - pre.equities[heroIdx]) * 100;
-          if (Math.abs(d) >= 5) {
-            sentences.push(
-              `For color, the flop still swung your equity about ${Math.abs(d).toFixed(1)} points even though you were already stacked.`
-            );
-          }
-        }
-      } else if (flopAllIn) {
-        sentences.push(
-          `You stacked off on the flop, so turn and river are runout-only — there is no escape hatch once the money is in.`
-        );
-        if (flopRow) {
-          const d = (flopRow.equities[heroIdx] - pre.equities[heroIdx]) * 100;
-          if (Math.abs(d) >= 5) {
-            sentences.push(
-              `That flop alone moved your equity roughly ${Math.abs(d).toFixed(1)} points from pre before the rest of the board arrived.`
-            );
-          }
-        }
-      } else if (turnAllIn) {
-        sentences.push(`You got the stack in on the turn, so only the river is pure sweat after that decision.`);
-        if (flopRow) {
-          const dF = (flopRow.equities[heroIdx] - pre.equities[heroIdx]) * 100;
-          if (Math.abs(dF) >= 5) {
-            sentences.push(`From pre to flop you shifted about ${Math.abs(dF).toFixed(1)} equity points in this sim.`);
-          }
-        }
-        if (turn && flopRow) {
-          const dT = (turn.equities[heroIdx] - flopRow.equities[heroIdx]) * 100;
-          if (Math.abs(dT) >= 5) {
-            sentences.push(
-              `Flop to turn, your equity moved ~${Math.abs(dT).toFixed(1)} points ${dT > 0 ? "in your favor" : "the wrong way"}.`
-            );
-          }
-        }
-      } else if (riverAllIn) {
-        sentences.push(
-          `You were all-in by the river after earlier streets still had decisions, so I'm reading the full path — not just the final card.`
-        );
+        if (p.type === 10) hasPayout = true;
       }
 
-      if (river) {
-        const maxEq = Math.max(...river.equities);
-        const winners = river.equities.map((v, i) => ({ v, i })).filter(x => Math.abs(x.v - maxEq) < 1e-9);
-        if (winners.length > 1) {
-          sentences.push(
-            `At the river the solver chops top equity between ${winners.map(w => `P${w.i + 1}`).join(" and ")} in this construction.`
-          );
-        } else {
-          sentences.push(
-            `At the river, P${winners[0].i + 1} owns the top equity share here at ${(maxEq * 100).toFixed(1)}%.`
-          );
-        }
-        if (heroWonShowdown && !heroShowdown.split) {
-          sentences.push(`PokerNow-style payouts credited you with a win, so the result matched your seat in the settlement.`);
-        } else if (heroShowdown.split) {
-          sentences.push(`Multiple seats were paid, so book this as a split or partial chop instead of a clean scoop story.`);
-        } else if (!heroWonShowdown) {
-          sentences.push(
-            `The settlement did not ship the pot to you, so this board run is a booked loss from your perspective.`
-          );
-        }
+      const flopDelta = (heroFlop - heroPre) * 100;
+      let flopLine = "";
+      if (flopDelta > 0.05) {
+        flopLine = `Flop inflection: you gained ${Math.abs(flopDelta).toFixed(1)} equity points on the flop.`;
+      } else if (flopDelta < -0.05) {
+        flopLine = `Flop inflection: you lost ${Math.abs(flopDelta).toFixed(1)} equity points on the flop.`;
+      } else {
+        flopLine = "Flop inflection: your flop equity stayed roughly flat.";
       }
 
-      let commitLine = "";
-      let verdictCore = "";
+      let outcomeLine = "";
+      if (heroFolded) outcomeLine = "Outcome: you folded before showdown.";
+      else if (!hasPayout) outcomeLine = "Outcome: no showdown payout event recorded for this hand.";
+      else if (heroShowdown.split) outcomeLine = "Outcome: you got paid in a split/chop result.";
+      else outcomeLine = heroShowdown.won ? "Outcome: you won the hand." : "Outcome: you lost the hand.";
+      if (foldCount > 0) {
+        outcomeLine += ` Fold action occurred (${foldCount} fold${foldCount === 1 ? "" : "s"}) along the line.`;
+      }
 
+      let verdict = "";
       if (!heroAllInStreet) {
-        verdictCore =
-          heroNet < -0.1
-            ? `Netting pre to river you gave up a real chunk of equity — that usually flags a continue or sizing leak unless the pot odds were outrageous.`
-            : heroNet > 0.1
-              ? `You picked up equity across the runout, which is what I want to see when your line is pushing value.`
-              : `Everything lands in a neutral, mixed band — fine occasionally; watch for clustering on similar textures.`;
-      } else if (preflopAllIn || flopAllIn || turnAllIn) {
-        const ship = heroAllInStreet === "Preflop" ? "preflop" : heroAllInStreet === "Flop" ? "flop" : "turn";
-        commitLine = `When stacks went in on the ${ship}, this sim had you around ${(commitEq * 100).toFixed(1)}% equity — that is the number I grade first.`;
-        if (river && commitEq < 0.28 && heroWonShowdown && heroRiver >= 0.90) {
-          verdictCore = `You were crushed at that stack-off but the board bailed you out — treat it as a favorable suckout in your direction, not proof the jam was pristine.`;
-        } else if (river && commitEq < 0.28 && !heroWonShowdown) {
-          verdictCore = `You were a big dog when the money went in; losing tracks with how often villains brick in the long run too — this one behaved.`;
-        } else if (river && commitEq < 0.40 && heroWonShowdown && heroRiver >= 0.80) {
-          verdictCore = `You were behind at the stack-off and still scooped — results swung your way, so audit the jam instead of trusting the pot as validation.`;
-        } else if (river && commitEq < 0.40 && !heroWonShowdown) {
-          verdictCore = `Thin commitment spot — expect this family of stack-offs to cost EV if you repeat them without price or a killer read.`;
-        } else if (river && commitEq >= 0.60 && !heroWonShowdown && heroRiver <= 0.15) {
-          verdictCore = `You got sucked out on after committing strong — separate "was my get-in defensible" from "did this river help me," because the second part is mostly noise.`;
-        } else if (river && commitEq >= 0.60 && heroWonShowdown) {
-          verdictCore = `Your stack-off looked excellent and the payouts lining up with you matches having been on the right side at commitment.`;
+        verdict = heroNet < -0.1
+          ? "Verdict: your line gave up too much equity by river, so this is likely a strategic leak."
+          : (heroNet > 0.1
+            ? "Verdict: strong line with solid equity realization across the hand."
+            : "Verdict: mixed/neutral result with no major edge gained or lost.");
+      } else if (commitEq != null) {
+        const ship = heroAllInStreet.toLowerCase();
+        if (commitEq >= 0.6 && !heroShowdown.won && heroRiver <= 0.15) {
+          verdict = `Verdict: you got sucked out on after a strong ${ship} stack-off; this is mostly runout variance.`;
+        } else if (commitEq < 0.4 && heroShowdown.won) {
+          verdict = `Verdict: you were behind at the ${ship} stack-off but won the payout; don't let the result over-validate the get-in.`;
+        } else if (commitEq < 0.4 && !heroShowdown.won) {
+          verdict = `Verdict: thin ${ship} stack-off; this class of commit is likely losing over volume.`;
         } else {
-          verdictCore = `That ${ship} stack-off reads mixed — cross-check pot odds, dead money, and whether villains are actually wide enough before you autopilot it.`;
+          verdict = `Verdict: commitment quality on the ${ship} stack-off looked reasonable from an equity standpoint.`;
         }
       } else {
-        verdictCore =
-          heroNet < -0.1
-            ? `Most of the hurt was baked in before the river all-in — flag earlier decisions more than the last stub.`
-            : heroNet > 0.1
-              ? `Even ending all-in, you realized equity well on the way there.`
-              : `Neutral, mixed outcome once you account for earlier streets forcing you in.`;
+        verdict = "Verdict: mixed spot; review ranges and sizing for consistency.";
       }
 
-      if (commitLine) sentences.push(commitLine);
-      sentences.push(verdictCore);
+      const runSummary = [1, 2].map((k) => {
+        const f = review.results.find(r => normalizeReviewRunKey(r.run) === k && r.street === "Flop");
+        const t = review.results.find(r => normalizeReviewRunKey(r.run) === k && r.street === "Turn");
+        const rv = review.results.find(r => normalizeReviewRunKey(r.run) === k && r.street === "River");
+        if (!f && !t && !rv) return `Run ${k}: n/a`;
+        const fPct = ((f ? f.equities[heroIdx] : heroFlop) * 100).toFixed(1);
+        const tPct = ((t ? t.equities[heroIdx] : (f ? f.equities[heroIdx] : heroTurn)) * 100).toFixed(1);
+        const rPct = ((rv ? rv.equities[heroIdx] : (t ? t.equities[heroIdx] : heroRiver)) * 100).toFixed(1);
+        return `Run ${k} ${fPct} -> ${tPct} -> ${rPct}`;
+      }).join(" | ");
 
-      sentences.push(
-        `Equity traces about ${(heroPre * 100).toFixed(1)}% preflop, ${(heroFlop * 100).toFixed(1)}% on the flop, ${(heroTurn * 100).toFixed(1)}% on the turn, and ${(heroRiver * 100).toFixed(1)}% by the river.`
-      );
-      if (heroAllInStreet) {
-        sentences.push(
-          `After you were all-in on ${heroAllInStreet.toLowerCase()}, treat later streets as story and variance — stack-off equity stays primary.`
-        );
-      }
-
-      let followUp = "";
-      if (river) {
-        if (!heroWonShowdown && heroRiver < 0.2 && !heroAllInStreet) {
-          followUp = `Next rep: trim thin continues versus this pressure and bias toward nutty spines plus redraws.`;
-        } else if (heroWonShowdown && heroRiver > 0.5 && !heroAllInStreet) {
-          followUp = `Keep pressing similar aggression when the sim backs you with this much river equity — the pattern is doing work.`;
-        } else if (heroAllInStreet && (preflopAllIn || flopAllIn || turnAllIn) && commitEq < 0.35 && heroWonShowdown) {
-          followUp = `Tag it as a bailout — drill ~${(commitEq * 100).toFixed(0)}% stack-offs so you are not planning to "river" your way out.`;
-        } else if (heroAllInStreet && (preflopAllIn || flopAllIn || turnAllIn) && commitEq < 0.35 && !heroWonShowdown) {
-          followUp = `If this felt automatic, tighten the jamming threshold or chase a fatter price before stacking as the clear underdog.`;
-        }
-      }
-
-      sentences.push(`Texture-wise the flop plays ${band(heroFlop)} for you and the turn reads ${band(heroTurn)}.`);
-
-      if (heroAllInStreet && (preflopAllIn || flopAllIn)) {
-        if (heroFlop < 0.4) {
-          sentences.push(`Looking ahead, demand nuttier primaries or massive pot odds before repeating early stack-offs this light.`);
-        } else if (heroFlop >= 0.55) {
-          sentences.push(
-            `Study reps where you can bomb it in with this much equity plus redraws on similar monotone or wrap-heavy boards.`
-          );
-        } else {
-          sentences.push(`Edge is marginal — recycle the spot only with dead money, live blockers, or proof the field is too wide.`);
-        }
-      }
-
-      const turnDrop = heroTurn - heroFlop;
-      if (turnDrop <= -0.12 && !heroAllInStreet) {
-        sentences.push(`Leak radar: you bled a lot from flop to turn, which often means floating or calling with second-tier structures.`);
-      }
-      const preGap = heroPre - pre.equities[leaderIdx];
-      if (!heroAllInStreet) {
-        if (preGap <= -0.12) {
-          sentences.push(`Preflop you trailed the table leader — tighten continues and nut up your continuing range.`);
-        } else if (preGap >= 0.08) {
-          sentences.push(`You started with a preflop edge on part of the field — that justifies more pressure when interaction is good.`);
-        }
-      }
-
-      if (heroAllInStreet && (preflopAllIn || flopAllIn || turnAllIn)) {
-        sentences.push(
-          `Secondary read: P${leaderIdx + 1} was the preflop equity pace car at ${(pre.equities[leaderIdx] * 100).toFixed(1)}% — useful context, but stack-off equity is still king.`
-        );
-      } else {
-        sentences.push(
-          `For reference, P${leaderIdx + 1} opened the preflop chart as the favorite at ${(pre.equities[leaderIdx] * 100).toFixed(1)}%.`
-        );
-      }
-
-      if (followUp) sentences.push(followUp);
-
-      const out = sentences.filter(Boolean).join(" ");
-      if (out.length < 120) return `${out} Action likely standard — no screaming equity swing showed up.`;
-      return out;
+      const parts = [
+        `You are ${heroName} (P${heroIdx + 1}).`,
+        `Hand shape: ${heroAllInStreet ? `${heroAllInStreet.toLowerCase()} stack-off` : "chips behind through runout"}.`,
+        flopLine,
+        outcomeLine,
+        heroAllInStreet && commitEq != null
+          ? `Commitment snapshot (${heroAllInStreet.toLowerCase()} all-in): ~${(commitEq * 100).toFixed(1)}% at stack-off vs these cards.`
+          : "Commitment snapshot: no all-in by hero this hand.",
+        verdict,
+        `Summary (both runouts): ${runSummary}.`
+      ];
+      return parts.filter(Boolean).join(" ");
     }
 
     function renderCoachForHero() {
