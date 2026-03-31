@@ -1787,13 +1787,16 @@
       const heroRiver = river ? river.equities[heroIdx] : heroTurn;
       const heroNet = heroRiver - heroPre;
       if (heroNet <= -0.1 && !heroAllInStreet) {
-        notes.push(`Mistake alert: your equity dropped ${Math.abs(heroNet * 100).toFixed(1)} points from preflop to river; likely over-continuing a dominated line.`);
+        notes.push(`Leak signal: your equity fell ${Math.abs(heroNet * 100).toFixed(1)} points by river. Likely too wide continuation against stronger ranges.`);
+        notes.push("Adjustment: tighten flop/turn continue thresholds and prioritize nut-draw + redraw structures.");
       } else if (heroNet <= -0.1 && heroAllInStreet) {
         notes.push(`Variance note: you were all-in on ${heroAllInStreet}, then equity ran against you by ${Math.abs(heroNet * 100).toFixed(1)} points (possible suckout sequence).`);
       } else if (heroNet >= 0.1) {
-        notes.push(`Good realization: your line gained ${Math.abs(heroNet * 100).toFixed(1)} points from preflop to river.`);
+        notes.push(`Strong realization: your line gained ${Math.abs(heroNet * 100).toFixed(1)} points from preflop to river.`);
+        notes.push("GTO-style takeaway: your line retained high-equity/nut-heavy branches while weaker combos dropped out.");
       } else {
         notes.push("Near-GTO stability: your overall equity stayed relatively stable across streets.");
+        notes.push("Adjustment: choose lower-variance sizing lines in similar spots; edge likely comes from small frequency improvements.");
       }
       if (river) {
         const maxEq = Math.max(...river.equities);
@@ -1801,8 +1804,8 @@
         const heroWon = winners.some(w => w.i === heroIdx);
         if (winners.length > 1) notes.push(`River finishes as chopped equity between ${winners.map(w => `P${w.i + 1}`).join(", ")}.`);
         else notes.push(`River winner by equity: P${winners[0].i + 1} (${(maxEq * 100).toFixed(1)}%).`);
-        if (!heroWon && heroRiver < 0.2) {
-          notes.push("Coach: this line trends non-optimal for your seat; prefer tighter continues vs this action path.");
+        if (!heroWon && heroRiver < 0.2 && !heroAllInStreet) {
+          notes.push("Coach: line appears non-optimal for your seat in this tree; fold/call less and continue with stronger nut potential.");
         } else if (heroWon && heroRiver > 0.5) {
           notes.push("Coach: strong value-realization line for your seat; this is close to a GTO-favored outcome.");
         }
@@ -1855,11 +1858,14 @@
       const setProgress = (pct, label) => {
         if (onProgress) onProgress(Math.max(0, Math.min(100, pct)), label);
       };
+      const yieldUi = () => new Promise(r => requestAnimationFrame(() => r()));
       setProgress(5, "Fetching hand data");
+      await yieldUi();
       const res = await fetch(`https://media.pokernow.com/shared-hands/${handId}.json`);
       if (!res.ok) throw new Error(`Unable to fetch hand (${res.status})`);
       const data = await res.json();
       setProgress(15, "Parsing players and boards");
+      await yieldUi();
       const players = extractReviewPlayers(data);
       if (!players || players.length < 2) throw new Error("Need at least two revealed 4-card hands in this hand.");
       const settings = { maxTrials: 80000, minTrials: 10000, maxMs: 2500, targetCi: 0.005 };
@@ -1870,6 +1876,7 @@
       const preflop = runEquityForManyHands(players, makeBoardFromCards([]), settings);
       if (preflop.error) throw new Error(preflop.error);
       setProgress(30, "Preflop solved");
+      await yieldUi();
       let totalStreetJobs = 0;
       if (!runs.length) {
         totalStreetJobs = 1;
@@ -1890,6 +1897,7 @@
         allResults.push({ run: null, street: "Preflop", board: [], ...preflop });
         completedStreetJobs++;
         progressFromStreetWork();
+        await yieldUi();
       } else {
         allResults.push({ run: 0, street: "Preflop", board: [], ...preflop });
         for (const runData of runs) {
@@ -1904,10 +1912,12 @@
             allResults.push({ run: runData.run, street: st.name, board: st.cards, ...r });
             completedStreetJobs++;
             progressFromStreetWork();
+            await yieldUi();
           }
         }
       }
       setProgress(100, "Finalizing");
+      await yieldUi();
       return { data, players, runs, results: allResults };
     }
 
