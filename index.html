@@ -1883,50 +1883,47 @@
       return timeline;
     }
 
-    function buildCompactTimelineView(timeline, review) {
-      const key = [];
-      const preAction = timeline.filter(t =>
-        t.label.includes("posts blind") || t.label.includes("calls") || t.label.includes("bets/raises")
-      );
-      const boardRows = timeline.filter(t => t.label.startsWith("Board "));
-      const wins = timeline.filter(t => t.label.includes(" wins "));
-      key.push(...preAction.slice(0, 4));
+    function timelineRowIsRelevant(t) {
+      const s = t.label;
+      if (s.startsWith("Board ")) return true;
+      if (s.includes(" wins ")) return true;
+      if (s.includes("folds")) return true;
+      if (s.includes("posts blind") || s.includes("blind/ante")) return true;
+      if (s.includes("calls ") || s.includes("bets/raises")) return true;
+      return false;
+    }
 
-      // Force canonical board sequence: Flop -> Turn 1 -> River 1 -> Turn 2 -> River 2 ...
-      const boardMap = new Map();
-      for (const row of boardRows) {
-        const m = row.label.match(/^Board (Flop|Turn|River)(?: \(Run (\d+)\))?:/);
-        if (!m) continue;
-        const street = m[1];
-        const run = m[2] ? Number(m[2]) : 0;
-        boardMap.set(`${street}|${run}`, row);
-      }
-      const forced = [];
-      const sharedFlop = boardMap.get("Flop|0");
-      if (sharedFlop) forced.push(sharedFlop);
-      const runs = (review?.runs || []).map(r => Number(r.run)).filter(Number.isFinite).sort((a, b) => a - b);
-      if (runs.length) {
-        for (const run of runs) {
-          const turn = boardMap.get(`Turn|${run}`);
-          const river = boardMap.get(`River|${run}`);
-          if (turn) forced.push(turn);
-          if (river) forced.push(river);
-        }
-      } else {
-        for (const row of boardRows) forced.push(row);
-      }
-      key.push(...forced);
-      key.push(...wins.slice(-Math.max(2, runs.length || 1)));
-
-      const dedup = [];
+    function dedupeTimelineRows(rows) {
+      const out = [];
       const seen = new Set();
-      for (const row of key) {
+      for (const row of rows) {
         const k = `${row.label}|${row.pot}`;
         if (seen.has(k)) continue;
         seen.add(k);
-        dedup.push(row);
+        out.push(row);
       }
-      return dedup;
+      return out;
+    }
+
+    function injectMissingFlopTimelineRow(rows, review) {
+      if (rows.some(t => /^Board Flop/.test(t.label))) return rows;
+      const flop = review?.runs?.[0]?.flop;
+      if (!flop || flop.length < 3) return rows;
+      const turnIdx = rows.findIndex(t => /^Board Turn/.test(t.label));
+      const potRef = turnIdx > 0 ? rows[turnIdx - 1].pot : (rows.length ? rows[rows.length - 1].pot : 0);
+      const syn = {
+        label: `Board Flop: ${flop.map(cardToPretty).join(" ")}`,
+        pot: potRef
+      };
+      if (turnIdx === -1) return [...rows, syn];
+      const out = rows.slice();
+      out.splice(turnIdx, 0, syn);
+      return out;
+    }
+
+    function buildCompactTimelineView(timeline, review) {
+      const chronological = timeline.filter(timelineRowIsRelevant);
+      return dedupeTimelineRows(injectMissingFlopTimelineRow(chronological, review));
     }
 
     function compactTimelineItems(timeline) {
@@ -1966,7 +1963,7 @@
       let street = "Preflop";
       for (const ev of review.data.events) {
         const p = ev.payload || {};
-        if (p.type === 9 && Number(p.run) === 1) {
+        if (p.type === 9) {
           if (p.turn === 1) street = "Flop";
           else if (p.turn === 2) street = "Turn";
           else if (p.turn === 3) street = "River";
