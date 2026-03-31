@@ -1655,6 +1655,13 @@
 
     function parseTimelineEvents(data, players) {
       const seatToName = new Map(players.map(p => [p.seat, p.name]));
+      const runPayout = new Map();
+      for (const ev of data.events || []) {
+        const p = ev.payload || {};
+        if (p.type === 10 && p.runNumber != null && Number.isFinite(Number(p.value))) {
+          runPayout.set(String(p.runNumber), Number(p.value));
+        }
+      }
       const timeline = [];
       let pot = 0;
       let streetContrib = new Map();
@@ -1689,7 +1696,10 @@
         else if (p.type === 9) {
           const streetMap = { 1: "Flop", 2: "Turn", 3: "River" };
           const cards = Array.isArray(p.cards) ? p.cards.map(cardToPretty).join(" ") : "";
-          label = `Board ${streetMap[p.turn] || `Turn ${p.turn}`}${p.run ? ` (Run ${p.run})` : ""}: ${cards}`;
+          const runTag = p.run ? ` (Run ${p.run})` : "";
+          const runPot = p.run ? runPayout.get(String(p.run)) : null;
+          const runPotTag = runPot != null ? ` | Run Pot ${runPot}` : "";
+          label = `Board ${streetMap[p.turn] || `Turn ${p.turn}`}${runTag}: ${cards}${runPotTag}`;
           const nextStreetIndex = Number(p.turn || streetIndex + 1);
           if (nextStreetIndex !== streetIndex) {
             streetContrib = new Map();
