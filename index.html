@@ -1653,6 +1653,83 @@
       return { trials, equities };
     }
 
+    async function runEquityForManyHandsAsync(hands, knownBoard, settings, onProgress) {
+      const used = new Set([...knownBoard.filter(Boolean), ...hands.flatMap(h => h.cards)]);
+      if (used.size !== knownBoard.filter(Boolean).length + hands.length * 4) return { error: "Duplicate cards detected in player hands/board." };
+      const knownCount = knownBoard.filter(Boolean).length;
+      const counts = Array(hands.length).fill(0);
+      let trials = 0;
+      const yieldUi = () => new Promise(r => setTimeout(r, 0));
+
+      const report = (done, total) => {
+        if (!onProgress || total <= 0) return;
+        onProgress(Math.max(0, Math.min(1, done / total)));
+      };
+
+      if (knownCount === 5) {
+        const winners = evaluateRunoutWinners(hands, knownBoard);
+        updateEquityFromWinners(counts, winners);
+        trials = 1;
+        report(1, 1);
+      } else if (knownCount === 4) {
+        const deck = FULL_DECK.filter(c => !used.has(c));
+        const total = deck.length;
+        for (let i = 0; i < deck.length; i++) {
+          const board = knownBoard.slice();
+          board[4] = deck[i];
+          const winners = evaluateRunoutWinners(hands, board);
+          updateEquityFromWinners(counts, winners);
+          trials++;
+          if (i % 12 === 0) {
+            report(i + 1, total);
+            await yieldUi();
+          }
+        }
+        report(total, total);
+      } else if (knownCount === 3) {
+        const deck = FULL_DECK.filter(c => !used.has(c));
+        const total = (deck.length * (deck.length - 1)) / 2;
+        let done = 0;
+        for (let i = 0; i < deck.length - 1; i++) {
+          for (let j = i + 1; j < deck.length; j++) {
+            const board = knownBoard.slice();
+            board[3] = deck[i];
+            board[4] = deck[j];
+            const winners = evaluateRunoutWinners(hands, board);
+            updateEquityFromWinners(counts, winners);
+            trials++;
+            done++;
+            if (done % 80 === 0) {
+              report(done, total);
+              await yieldUi();
+            }
+          }
+        }
+        report(total, total);
+      } else {
+        const maxTrials = knownCount <= 1 ? settings.maxTrials : Math.min(settings.maxTrials, 40000);
+        const deck = FULL_DECK.filter(c => !used.has(c));
+        const missingIdx = [];
+        for (let i = 0; i < 5; i++) if (!knownBoard[i]) missingIdx.push(i);
+        for (let t = 0; t < maxTrials; t++) {
+          const board = knownBoard.slice();
+          const picks = sampleUniqueIndices(deck.length, missingIdx.length);
+          for (let i = 0; i < missingIdx.length; i++) board[missingIdx[i]] = deck[picks[i]];
+          const winners = evaluateRunoutWinners(hands, board);
+          updateEquityFromWinners(counts, winners);
+          trials++;
+          if (t % 1400 === 0) {
+            report(t + 1, maxTrials);
+            await yieldUi();
+          }
+        }
+        report(maxTrials, maxTrials);
+      }
+
+      const equities = counts.map(v => v / Math.max(1, trials));
+      return { trials, equities };
+    }
+
     function parseTimelineEvents(data, players) {
       const seatToName = new Map(players.map(p => [p.seat, p.name]));
       const runPayout = new Map();
@@ -1880,51 +1957,30 @@
       if (!players || players.length < 2) throw new Error("Need at least two revealed 4-card hands in this hand.");
       const settings = { maxTrials: 80000, minTrials: 10000, maxMs: 2500, targetCi: 0.005 };
       const runs = extractRunBoards(data);
-      const baseStreets = [{ name: "Preflop", cards: [] }];
       const allResults = [];
-      // Preflop is identical across all runouts; solve once and reuse.
-      const preflop = runEquityForManyHands(players, makeBoardFromCards([]), settings);
-      if (preflop.error) throw new Error(preflop.error);
-      setProgress(30, "Preflop solved");
-      await yieldUi();
-      let totalStreetJobs = 0;
+      const jobs = [{ run: runs.length ? 0 : null, street: "Preflop", cards: [] }];
       if (!runs.length) {
-        totalStreetJobs = 1;
+        // only preflop when no board cards are available
       } else {
         for (const runData of runs) {
-          if (runData.flop?.length >= 3) totalStreetJobs++;
-          if (runData.turn?.length >= 4) totalStreetJobs++;
-          if (runData.river?.length >= 5) totalStreetJobs++;
+          if (runData.flop?.length >= 3) jobs.push({ run: runData.run, street: "Flop", cards: runData.flop });
+          if (runData.turn?.length >= 4) jobs.push({ run: runData.run, street: "Turn", cards: runData.turn });
+          if (runData.river?.length >= 5) jobs.push({ run: runData.run, street: "River", cards: runData.river });
         }
       }
-      let completedStreetJobs = 0;
-      const progressFromStreetWork = () => {
-        const frac = totalStreetJobs ? (completedStreetJobs / totalStreetJobs) : 1;
-        const pct = 30 + Math.round(frac * 60);
-        setProgress(pct, "Computing street odds");
-      };
-      if (!runs.length) {
-        allResults.push({ run: null, street: "Preflop", board: [], ...preflop });
-        completedStreetJobs++;
-        progressFromStreetWork();
+      const totalJobs = jobs.length;
+      for (let i = 0; i < jobs.length; i++) {
+        const job = jobs[i];
+        const jobStart = 20 + Math.round((i / totalJobs) * 75);
+        const jobEnd = 20 + Math.round(((i + 1) / totalJobs) * 75);
+        const board = makeBoardFromCards(job.cards);
+        const r = await runEquityForManyHandsAsync(players, board, settings, (localFrac) => {
+          const pct = Math.round(jobStart + (jobEnd - jobStart) * localFrac);
+          setProgress(pct, `Computing ${job.street}${job.run ? ` (Run ${job.run})` : ""}`);
+        });
+        if (r.error) throw new Error(r.error);
+        allResults.push({ run: job.run, street: job.street, board: job.cards, ...r });
         await yieldUi();
-      } else {
-        allResults.push({ run: 0, street: "Preflop", board: [], ...preflop });
-        for (const runData of runs) {
-          const streets = [];
-          if (runData.flop?.length >= 3) streets.push({ name: "Flop", cards: runData.flop });
-          if (runData.turn?.length >= 4) streets.push({ name: "Turn", cards: runData.turn });
-          if (runData.river?.length >= 5) streets.push({ name: "River", cards: runData.river });
-          for (const st of streets) {
-            const board = makeBoardFromCards(st.cards);
-            const r = runEquityForManyHands(players, board, settings);
-            if (r.error) throw new Error(r.error);
-            allResults.push({ run: runData.run, street: st.name, board: st.cards, ...r });
-            completedStreetJobs++;
-            progressFromStreetWork();
-            await yieldUi();
-          }
-        }
       }
       setProgress(100, "Finalizing");
       await yieldUi();
