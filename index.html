@@ -361,6 +361,7 @@
       display: grid;
       gap: 8px;
       grid-template-columns: 1fr 1fr;
+      align-items: start;
     }
     .review-card {
       background: rgba(255,255,255,0.03);
@@ -369,6 +370,7 @@
       padding: 8px;
       font-size: 0.82rem;
       color: #e0efe8;
+      min-height: 0;
     }
     .review-players-grid {
       display: grid;
@@ -403,8 +405,10 @@
     .timeline-list {
       display: grid;
       gap: 4px;
-      max-height: 180px;
-      overflow: auto;
+      max-height: 220px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      overscroll-behavior: contain;
       margin-top: 6px;
     }
     .timeline-item {
@@ -424,8 +428,10 @@
       gap: 5px;
       font-size: 0.8rem;
       color: #dcebe4;
-      max-height: 180px;
-      overflow: auto;
+      max-height: 220px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      overscroll-behavior: contain;
     }
     @media (max-width: 900px) {
       .range-grid { grid-template-columns: 1fr; }
@@ -1933,7 +1939,7 @@
       }
       if (notes.length < 2) notes.push("Action likely standard; no major equity swing detected.");
       if (!advice.length) advice.push("Adjustment: review flop/turn continue thresholds against stronger ranges.");
-      return [...notes.slice(0, 7), ...advice.slice(0, 4)];
+      return [...notes, ...advice];
     }
 
     function renderCoachForHero() {
@@ -2393,7 +2399,7 @@
           }
         }
 
-        const timeline = compactTimelineItems(parseTimelineEvents(review.data, review.players));
+        const timeline = parseTimelineEvents(review.data, review.players);
         if (!timeline.length) {
           const empty = document.createElement("div");
           empty.className = "timeline-item";
