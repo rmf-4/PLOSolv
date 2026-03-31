@@ -364,6 +364,131 @@
     }
     .hidden { display: none !important; }
 
+    #preflopDrillPanel {
+      position: relative;
+      display: grid;
+      gap: 10px;
+      grid-auto-rows: max-content;
+    }
+    .drill-wrap {
+      position: relative;
+      padding-top: 4px;
+    }
+    .drill-score-corner {
+      position: absolute;
+      top: 6px;
+      right: 10px;
+      font-size: 0.78rem;
+      font-weight: 650;
+      color: #c8ddd4;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 5px 9px;
+    }
+    .drill-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px 14px;
+      margin-bottom: 4px;
+      padding-right: 120px;
+    }
+    .drill-head h2 {
+      margin: 0;
+      font-size: 0.96rem;
+    }
+    .drill-position-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 5px 11px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #e8f6ef;
+      background: linear-gradient(180deg, rgba(56, 211, 159, 0.22), rgba(56, 211, 159, 0.08));
+      border: 1px solid rgba(56, 211, 159, 0.35);
+    }
+    .drill-cards-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      min-height: 74px;
+    }
+    .drill-cards-row .card {
+      cursor: default;
+    }
+    @keyframes drillCardDealIn {
+      from {
+        transform: scale(0.6);
+        opacity: 0;
+      }
+      to {
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
+    .drill-cards-row .card.drill-card-anim {
+      animation: drillCardDealIn 0.22s ease-out forwards;
+      opacity: 0;
+    }
+    .drill-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 4px;
+    }
+    button.drill-big-btn {
+      flex: 1 1 140px;
+      min-width: 120px;
+      padding: 14px 22px;
+      font-size: 1.05rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      border-radius: 12px;
+    }
+    button.drill-big-btn.drill-open {
+      color: #05150f;
+      background: linear-gradient(180deg, #63f6bf, #2fd898);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+    button.drill-big-btn.drill-fold {
+      color: #f0f7f3;
+      background: #1a2923;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+    }
+    .drill-verdict {
+      margin-top: 8px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(0, 0, 0, 0.38);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .drill-verdict-title {
+      font-size: 1.05rem;
+      font-weight: 800;
+      margin-bottom: 6px;
+    }
+    .drill-verdict-title.ok { color: var(--accent); }
+    .drill-verdict-title.bad { color: var(--danger); }
+    .drill-hand-score {
+      font-size: 0.88rem;
+      color: #d5e8df;
+      margin-bottom: 8px;
+    }
+    .drill-bullets {
+      margin: 0 0 12px 1em;
+      padding: 0;
+      color: #d0e3da;
+      font-size: 0.82rem;
+      line-height: 1.45;
+    }
+    .drill-bullets li { margin-bottom: 4px; }
+    .drill-footer {
+      margin-top: 4px;
+    }
+
     .range-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -549,6 +674,7 @@
       <button class="tab-btn active" id="tabExact">Exact Hand vs Hand</button>
       <button class="tab-btn" id="tabReview">PokerNow Review</button>
       <button class="tab-btn" id="tabRange">Range vs Range</button>
+      <button class="tab-btn" id="tabPreflopDrill">Preflop Drill</button>
     </div>
 
     <div class="table" id="exactTabPanel">
@@ -709,6 +835,33 @@
         </div>
       </div>
     </div>
+
+    <div class="table hidden" id="preflopDrillPanel">
+      <div class="drill-wrap">
+        <div class="drill-score-corner" id="drillRunningScore">0/0 correct</div>
+        <div class="drill-head">
+          <h2>Preflop Drill</h2>
+          <div class="drill-position-badge" id="drillPositionBadge">You are CO</div>
+        </div>
+        <div class="board-panel">
+          <h2>Your hand</h2>
+          <div class="drill-cards-row" id="drillCardsRow"></div>
+        </div>
+        <div class="drill-actions" id="drillChoiceRow">
+          <button type="button" class="drill-big-btn drill-open" id="drillOpenBtn">OPEN</button>
+          <button type="button" class="drill-big-btn drill-fold" id="drillFoldBtn">FOLD</button>
+        </div>
+        <div class="drill-verdict hidden" id="drillVerdictPanel">
+          <div class="drill-verdict-title" id="drillVerdictTitle">CORRECT ✓</div>
+          <div class="drill-hand-score" id="drillHandScoreLine">Hand Score: 0/100</div>
+          <ul class="drill-bullets" id="drillBulletList"></ul>
+          <button type="button" class="primary" id="drillNextBtn">Next Hand</button>
+        </div>
+        <div class="drill-footer">
+          <button type="button" class="secondary" id="drillResetScoreBtn">Reset Score</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -774,6 +927,22 @@
       lastReview: null
     };
 
+    const PREFLOP_DRILL_POSITIONS = ["UTG", "HJ", "CO", "BTN", "SB"];
+    const PREFLOP_OPEN_THRESHOLDS = { UTG: 62, HJ: 55, CO: 48, BTN: 38, SB: 33 };
+
+    let preflopDrillPrevTab = null;
+    let preflopDrillCorrect = 0;
+    let preflopDrillTotal = 0;
+    const preflopDrillState = {
+      cards: [],
+      position: "CO",
+      answered: false,
+      answerLock: false,
+      userPick: null,
+      lastEval: null,
+      justDealt: false
+    };
+
     const el = {
       p1Cards: document.getElementById("p1Cards"),
       p2Cards: document.getElementById("p2Cards"),
@@ -827,7 +996,20 @@
       reviewStreetResults: document.getElementById("reviewStreetResults"),
       reviewTimeline: document.getElementById("reviewTimeline"),
       reviewCoach: document.getElementById("reviewCoach"),
-      reviewHeroSelect: document.getElementById("reviewHeroSelect")
+      reviewHeroSelect: document.getElementById("reviewHeroSelect"),
+      tabPreflopDrill: document.getElementById("tabPreflopDrill"),
+      preflopDrillPanel: document.getElementById("preflopDrillPanel"),
+      drillRunningScore: document.getElementById("drillRunningScore"),
+      drillPositionBadge: document.getElementById("drillPositionBadge"),
+      drillCardsRow: document.getElementById("drillCardsRow"),
+      drillOpenBtn: document.getElementById("drillOpenBtn"),
+      drillFoldBtn: document.getElementById("drillFoldBtn"),
+      drillVerdictPanel: document.getElementById("drillVerdictPanel"),
+      drillVerdictTitle: document.getElementById("drillVerdictTitle"),
+      drillHandScoreLine: document.getElementById("drillHandScoreLine"),
+      drillBulletList: document.getElementById("drillBulletList"),
+      drillNextBtn: document.getElementById("drillNextBtn"),
+      drillResetScoreBtn: document.getElementById("drillResetScoreBtn")
     };
 
     function fullDeck() {
@@ -841,6 +1023,332 @@
     }
     const FULL_DECK = fullDeck();
     const CARD_TO_INDEX = new Map(FULL_DECK.map((c, i) => [c, i]));
+
+    function drillValueToRank(v) {
+      const m = { 14: "A", 13: "K", 12: "Q", 11: "J", 10: "T", 9: "9", 8: "8", 7: "7", 6: "6", 5: "5", 4: "4", 3: "3", 2: "2" };
+      return m[v] || "?";
+    }
+
+    function drillSuitLongName(suitId) {
+      const m = { s: "spades", h: "hearts", d: "diamonds", c: "clubs" };
+      return m[suitId] || suitId;
+    }
+
+    function drillRankValues(cards) {
+      return cards.map(c => RANK_TO_VALUE[c[0]]).sort((a, b) => b - a);
+    }
+
+    function drillHasDangler(sortedVals) {
+      const v = sortedVals;
+      if (v.length !== 4) return false;
+      if (v[2] - v[3] >= 3) return true;
+      for (let i = 1; i <= 2; i++) {
+        const up = v[i - 1] - v[i];
+        const down = v[i] - v[i + 1];
+        if (Math.min(up, down) >= 3) return true;
+      }
+      return false;
+    }
+
+    function drillTotalGaps(sortedVals) {
+      let g = 0;
+      for (let i = 0; i < sortedVals.length - 1; i++) {
+        g += Math.max(0, sortedVals[i] - sortedVals[i + 1] - 1);
+      }
+      return g;
+    }
+
+    function drillDanglerInfo(cards) {
+      const v = drillRankValues(cards);
+      if (!drillHasDangler(v)) return null;
+      let danglerVal = null;
+      if (v[2] - v[3] >= 3) {
+        danglerVal = v[3];
+      } else {
+        for (let i = 1; i <= 2; i++) {
+          const up = v[i - 1] - v[i];
+          const down = v[i] - v[i + 1];
+          if (Math.min(up, down) >= 3) {
+            danglerVal = v[i];
+            break;
+          }
+        }
+      }
+      if (danglerVal == null) return null;
+      const danglerIdx = cards.findIndex(c => RANK_TO_VALUE[c[0]] === danglerVal);
+      if (danglerIdx < 0) return null;
+      const others = cards.filter((_, j) => j !== danglerIdx);
+      const otherVals = [...new Set(others.map(c => RANK_TO_VALUE[c[0]]))].sort((a, b) => b - a);
+      const chain = otherVals.map(drillValueToRank).join("-");
+      const danglerRank = drillValueToRank(danglerVal);
+      return { danglerRank, chain };
+    }
+
+    function drillRundownRankString(cards) {
+      const vals = [...new Set(cards.map(c => RANK_TO_VALUE[c[0]]))].sort((a, b) => b - a);
+      return vals.map(drillValueToRank).join("-");
+    }
+
+    /**
+     * Feature-based PLO4 preflop drill scoring (not a lookup table).
+     * @returns {{ score: number, action: 'open'|'fold', reasons: string[], drillExplain: string[] }}
+     */
+    function scorePLOHand(cards, position) {
+      const reasons = [];
+      const suitHist = {};
+      for (const c of cards) {
+        const s = c[1];
+        suitHist[s] = (suitHist[s] || 0) + 1;
+      }
+      const suitCounts = Object.values(suitHist).sort((a, b) => b - a);
+      const maxSuit = suitCounts[0] || 0;
+      const numSuits = suitCounts.length;
+      const isRainbow = numSuits === 4;
+      const isDoubleSuited = maxSuit < 3 && numSuits === 2 && suitCounts[0] === 2 && suitCounts[1] === 2;
+      const isSingleSuited = maxSuit < 3 && maxSuit === 2 && numSuits === 3;
+      const isTripleOrQuad = maxSuit >= 3;
+
+      let suitedPts = 0;
+      let suitedLabel = "";
+      if (isTripleOrQuad) {
+        suitedPts = 6;
+        const heavyEntry = Object.entries(suitHist).find(([, n]) => n >= 3);
+        const sId = heavyEntry ? heavyEntry[0] : "?";
+        suitedLabel = `Flush blocker: three or four ${drillSuitLongName(sId)} — awkward structure (6 pts).`;
+      } else if (isDoubleSuited) {
+        suitedPts = 25;
+        const pairSuits = Object.entries(suitHist)
+          .filter(([, n]) => n === 2)
+          .map(([s]) => drillSuitLongName(s));
+        suitedLabel = `✓ Double suited (${pairSuits.join(" + ")})`;
+      } else if (isSingleSuited) {
+        suitedPts = 13;
+        const pairS = Object.entries(suitHist).find(([, n]) => n === 2);
+        suitedLabel = `✓ Single suited (${pairS ? drillSuitLongName(pairS[0]) : "one suit"})`;
+      } else if (isRainbow) {
+        suitedPts = 0;
+        suitedLabel = "Rainbow — no suited upside.";
+      } else {
+        suitedPts = 0;
+        suitedLabel = "Suitedness is weak or fragmented.";
+      }
+
+      const sortedVals = drillRankValues(cards);
+      const totalG = drillTotalGaps(sortedVals);
+      const dangler = drillHasDangler(sortedVals);
+      const danglerInfo = drillDanglerInfo(cards);
+
+      let connPts = 6;
+      if (totalG === 0) connPts = 30;
+      else if (totalG === 1) connPts = 24;
+      else if (totalG === 2) connPts = 18;
+      else if (totalG === 3) connPts = 12;
+      else connPts = 6;
+
+      if (totalG >= 4 || dangler) connPts = Math.min(connPts, 6);
+
+      let connLabel = "";
+      if (totalG === 0) {
+        connLabel = `✓ Perfect rundown: ${drillRundownRankString(cards)}, zero gaps`;
+      } else if (totalG === 1) {
+        connLabel = "Connectivity: strong — only one total rank gap across the four cards.";
+      } else if (totalG === 2) {
+        connLabel = "Connectivity: decent — two total rank gaps.";
+      } else if (totalG === 3) {
+        connLabel = "Connectivity: shaky — three total rank gaps.";
+      } else {
+        connLabel = "Connectivity: poor — four or more total rank gaps.";
+      }
+
+      const rankCounts = {};
+      for (const c of cards) {
+        const r = c[0];
+        rankCounts[r] = (rankCounts[r] || 0) + 1;
+      }
+      const aa = (rankCounts.A || 0) >= 2;
+      const kk = (rankCounts.K || 0) >= 2;
+      const aceCount = rankCounts.A || 0;
+      const broadwayCount = cards.filter(c => RANK_TO_VALUE[c[0]] >= 10).length;
+
+      let nutPts = 0;
+      let nutLabel = "";
+      if (aa) {
+        nutPts = 25;
+        nutLabel = "Pair of aces — top of range.";
+      } else if (kk) {
+        if (isDoubleSuited) {
+          nutPts = 22;
+          nutLabel = "Kings double suited — strong premium.";
+        } else if (isSingleSuited) {
+          nutPts = 16;
+          nutLabel = "Kings single suited — solid but not the top tier.";
+        } else {
+          nutPts = 10;
+          nutLabel = "Kings without strong suited shape — more fragile.";
+        }
+      } else if (aceCount === 1) {
+        nutPts = 10;
+        nutLabel = "Single ace — nut potential without a pair.";
+      }
+
+      const broadwayAdd = Math.min(8, broadwayCount * 2);
+      nutPts += broadwayAdd;
+      nutPts = Math.min(25, nutPts);
+
+      const aaRainbowLowConn = aa && isRainbow && totalG >= 3;
+      let aaPenaltyApplied = false;
+      if (aaRainbowLowConn) {
+        nutPts = Math.max(0, nutPts - 5);
+        aaPenaltyApplied = true;
+      }
+
+      if (broadwayAdd > 0 && !aa) {
+        nutLabel = nutLabel
+          ? `${nutLabel} Broadway density adds up to ${broadwayAdd} pts here.`
+          : `Broadway-heavy — up to ${broadwayAdd} pts from high-card density.`;
+      }
+
+      let raw = suitedPts + connPts + nutPts;
+      if (dangler) raw -= 15;
+      const score = Math.max(0, Math.min(100, Math.round(raw)));
+
+      const th = PREFLOP_OPEN_THRESHOLDS[position] ?? 55;
+      const action = score >= th ? "open" : "fold";
+      const actionWord = action === "open" ? "open" : "fold";
+
+      reasons.push(suitedLabel);
+      reasons.push(connLabel);
+      if (dangler && danglerInfo) {
+        reasons.push(`✗ Dangler: the ${danglerInfo.danglerRank} doesn't connect with ${danglerInfo.chain}`);
+      } else if (dangler) {
+        reasons.push("✗ Dangler hurts this hand.");
+      } else if (totalG <= 1) {
+        reasons.push("✓ Cohesive structure without a dangler.");
+      }
+
+      const posBullet = `📍 ${position} threshold: ${th} — your hand scored ${score} (${actionWord})`;
+      reasons.push(posBullet);
+
+      const featLines = [];
+      if (dangler && danglerInfo) {
+        featLines.push(`✗ Dangler: the ${danglerInfo.danglerRank} doesn't connect with ${danglerInfo.chain}`);
+      }
+      if (aaPenaltyApplied) {
+        featLines.push("✗ Aces with no suits and no connectivity — reduced value");
+      }
+      const shapeLine =
+        totalG === 0
+          ? `✓ Perfect rundown: ${drillRundownRankString(cards)}, zero gaps`
+          : isTripleOrQuad || isDoubleSuited || isSingleSuited
+            ? suitedLabel
+            : connLabel;
+      featLines.push(shapeLine);
+      const seenF = new Set();
+      const featUnique = featLines.filter((x) => {
+        if (seenF.has(x)) return false;
+        seenF.add(x);
+        return true;
+      });
+      const drillExplain = [...featUnique.slice(0, 2), posBullet].slice(0, 3);
+
+      return {
+        score,
+        action,
+        reasons,
+        drillExplain,
+        threshold: th,
+        suitedPts,
+        connPts,
+        nutPts,
+        dangler,
+        totalG,
+        aaPenaltyApplied
+      };
+    }
+
+    function resetPreflopDrillRunningScore() {
+      preflopDrillCorrect = 0;
+      preflopDrillTotal = 0;
+    }
+
+    function dealPreflopDrillHand() {
+      const deck = fullDeck();
+      for (let i = deck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const t = deck[i];
+        deck[i] = deck[j];
+        deck[j] = t;
+      }
+      preflopDrillState.cards = [deck[0], deck[1], deck[2], deck[3]];
+      preflopDrillState.position = PREFLOP_DRILL_POSITIONS[Math.floor(Math.random() * PREFLOP_DRILL_POSITIONS.length)];
+      preflopDrillState.answered = false;
+      preflopDrillState.answerLock = false;
+      preflopDrillState.userPick = null;
+      preflopDrillState.lastEval = null;
+      preflopDrillState.justDealt = true;
+    }
+
+    function updatePreflopDrillPanel() {
+      if (state.tab !== "preflopDrill") return;
+      el.drillRunningScore.textContent = `${preflopDrillCorrect}/${preflopDrillTotal} correct`;
+      el.drillPositionBadge.textContent = `You are ${preflopDrillState.position}`;
+      el.drillCardsRow.innerHTML = "";
+      const runDealAnim = preflopDrillState.justDealt;
+      preflopDrillState.justDealt = false;
+      preflopDrillState.cards.forEach((c, i) => {
+        const node = cardNode(c);
+        if (!node) return;
+        if (runDealAnim) {
+          node.classList.add("drill-card-anim");
+          node.style.animationDelay = `${i * 80}ms`;
+        } else {
+          node.classList.remove("drill-card-anim");
+          node.style.animationDelay = "";
+        }
+        el.drillCardsRow.appendChild(node);
+      });
+      const showVerdict = preflopDrillState.answered;
+      el.drillVerdictPanel.classList.toggle("hidden", !showVerdict);
+      const lockChoice = showVerdict || preflopDrillState.answerLock;
+      el.drillOpenBtn.disabled = lockChoice;
+      el.drillFoldBtn.disabled = lockChoice;
+      if (!showVerdict) {
+        el.drillVerdictTitle.textContent = "";
+        el.drillHandScoreLine.textContent = "";
+        el.drillBulletList.innerHTML = "";
+        el.drillVerdictTitle.classList.remove("ok", "bad");
+      }
+    }
+
+    function pickDrillBullets(ev) {
+      if (Array.isArray(ev.drillExplain) && ev.drillExplain.length) return ev.drillExplain.slice(0, 3);
+      return ev.reasons.slice(0, 3);
+    }
+
+    function submitDrillAnswer(pick) {
+      if (state.tab !== "preflopDrill" || preflopDrillState.answered || preflopDrillState.answerLock) return;
+      preflopDrillState.answerLock = true;
+      el.drillOpenBtn.disabled = true;
+      el.drillFoldBtn.disabled = true;
+      const ev = scorePLOHand(preflopDrillState.cards.slice(), preflopDrillState.position);
+      preflopDrillState.lastEval = ev;
+      preflopDrillState.userPick = pick;
+      preflopDrillState.answered = true;
+      const correct = pick === ev.action;
+      preflopDrillTotal += 1;
+      if (correct) preflopDrillCorrect += 1;
+      el.drillVerdictTitle.classList.remove("ok", "bad");
+      el.drillVerdictTitle.classList.add(correct ? "ok" : "bad");
+      el.drillVerdictTitle.textContent = correct ? "CORRECT ✓" : "INCORRECT ✗";
+      el.drillHandScoreLine.textContent = `Hand Score: ${ev.score}/100`;
+      el.drillBulletList.innerHTML = "";
+      for (const line of pickDrillBullets(ev)) {
+        const li = document.createElement("li");
+        li.textContent = line;
+        el.drillBulletList.appendChild(li);
+      }
+      updatePreflopDrillPanel();
+    }
 
     function cardSuitMeta(card) {
       const s = card[1];
@@ -2279,7 +2787,9 @@
       if (!m) return;
       try {
         const data = JSON.parse(decodeURIComponent(atob(m[1])));
-        if (data.tab === "range" || data.tab === "exact") state.tab = data.tab;
+        if (data.tab === "range" || data.tab === "exact" || data.tab === "review" || data.tab === "preflopDrill") {
+          state.tab = data.tab;
+        }
         if (Array.isArray(data.p1) && data.p1.length === 4) state.p1 = data.p1;
         if (Array.isArray(data.p2) && data.p2.length === 4) state.p2 = data.p2;
         if (Array.isArray(data.board) && data.board.length === 5) state.board = data.board;
@@ -2300,20 +2810,31 @@
     }
 
     function renderTabs() {
+      const prev = preflopDrillPrevTab;
+      preflopDrillPrevTab = state.tab;
+      if (state.tab === "preflopDrill" && prev !== "preflopDrill") {
+        dealPreflopDrillHand();
+      }
+
       const isExact = state.tab === "exact";
       const isRange = state.tab === "range";
       const isReview = state.tab === "review";
+      const isPreflopDrill = state.tab === "preflopDrill";
       el.tabExact.classList.toggle("active", isExact);
       el.tabRange.classList.toggle("active", isRange);
       el.tabReview.classList.toggle("active", isReview);
+      el.tabPreflopDrill.classList.toggle("active", isPreflopDrill);
       el.exactTabPanel.classList.toggle("hidden", !isExact);
       el.exactPicker.classList.toggle("hidden", !isExact);
       el.rangeTabPanel.classList.toggle("hidden", !isRange);
       el.reviewTabPanel.classList.toggle("hidden", !isReview);
+      el.preflopDrillPanel.classList.toggle("hidden", !isPreflopDrill);
       if (isExact) el.tabHelper.classList.remove("hidden");
       else el.tabHelper.classList.add("hidden");
       if (isRange) el.status.textContent = "Range mode: enter ranges and run simulation.";
-      if (isReview) el.status.textContent = "PokerNow Review: analyze a shared hand URL.";
+      else if (isReview) el.status.textContent = "PokerNow Review: analyze a shared hand URL.";
+      else if (isPreflopDrill) el.status.textContent = "Preflop Drill: choose open or fold; score is feature-based heuristics.";
+      updatePreflopDrillPanel();
     }
 
     function refreshPrecisionInputs() {
@@ -2436,6 +2957,23 @@
     el.tabReview.addEventListener("click", () => {
       state.tab = "review";
       render();
+    });
+
+    el.tabPreflopDrill.addEventListener("click", () => {
+      state.tab = "preflopDrill";
+      render();
+      syncUrlStateSoon();
+    });
+
+    el.drillOpenBtn.addEventListener("click", () => submitDrillAnswer("open"));
+    el.drillFoldBtn.addEventListener("click", () => submitDrillAnswer("fold"));
+    el.drillNextBtn.addEventListener("click", () => {
+      dealPreflopDrillHand();
+      updatePreflopDrillPanel();
+    });
+    el.drillResetScoreBtn.addEventListener("click", () => {
+      resetPreflopDrillRunningScore();
+      updatePreflopDrillPanel();
     });
 
     el.runRangeBtn.addEventListener("click", async () => {
