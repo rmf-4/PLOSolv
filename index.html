@@ -205,7 +205,7 @@
       color: #d8e8e1;
       font-size: 0.82rem;
     }
-    .sim-config input {
+    .sim-config input, .sim-config select {
       width: 84px;
       border: 1px solid rgba(255,255,255,0.16);
       border-radius: 8px;
@@ -438,6 +438,20 @@
         <button class="secondary" id="dealRiverBtn">Deal River</button>
         <button class="secondary" id="clearBoardBtn">Clear All</button>
         <span class="spacer"></span>
+        <label class="sim-config">Mode
+          <select id="exactPrecisionMode">
+            <option value="fast">Fast</option>
+            <option value="standard" selected>Standard</option>
+            <option value="precise">Precise</option>
+            <option value="custom">Custom</option>
+          </select>
+        </label>
+        <label class="sim-config">Target CI %
+          <input id="exactTargetCiInput" type="number" min="0.1" max="5" step="0.05" value="0.50" />
+        </label>
+        <label class="sim-config">Max Time (s)
+          <input id="exactMaxTimeInput" type="number" min="1" max="30" step="1" value="10" />
+        </label>
         <label class="sim-config">Simulations
           <input id="simCountInput" type="number" min="1000" max="1000000" step="1000" value="200000" />
         </label>
@@ -478,6 +492,20 @@
           <input id="rangeBoardInput" type="text" placeholder="AhKd7c" />
         </label>
         <span class="spacer"></span>
+        <label class="sim-config">Mode
+          <select id="rangePrecisionMode">
+            <option value="fast">Fast</option>
+            <option value="standard" selected>Standard</option>
+            <option value="precise">Precise</option>
+            <option value="custom">Custom</option>
+          </select>
+        </label>
+        <label class="sim-config">Target CI %
+          <input id="rangeTargetCiInput" type="number" min="0.1" max="5" step="0.05" value="0.50" />
+        </label>
+        <label class="sim-config">Max Time (s)
+          <input id="rangeMaxTimeInput" type="number" min="1" max="30" step="1" value="10" />
+        </label>
         <label class="sim-config">Simulations
           <input id="rangeSimCountInput" type="number" min="1000" max="1000000" step="1000" value="200000" />
         </label>
@@ -530,6 +558,9 @@
       dealRiverBtn: document.getElementById("dealRiverBtn"),
       clearBoardBtn: document.getElementById("clearBoardBtn"),
       simCountInput: document.getElementById("simCountInput"),
+      exactPrecisionMode: document.getElementById("exactPrecisionMode"),
+      exactTargetCiInput: document.getElementById("exactTargetCiInput"),
+      exactMaxTimeInput: document.getElementById("exactMaxTimeInput"),
       p1HandLabel: document.getElementById("p1HandLabel"),
       p2HandLabel: document.getElementById("p2HandLabel"),
       eqP1: document.getElementById("eqP1"),
@@ -543,6 +574,9 @@
       rangeP2Input: document.getElementById("rangeP2Input"),
       rangeBoardInput: document.getElementById("rangeBoardInput"),
       rangeSimCountInput: document.getElementById("rangeSimCountInput"),
+      rangePrecisionMode: document.getElementById("rangePrecisionMode"),
+      rangeTargetCiInput: document.getElementById("rangeTargetCiInput"),
+      rangeMaxTimeInput: document.getElementById("rangeMaxTimeInput"),
       runRangeBtn: document.getElementById("runRangeBtn"),
       clearRangeBtn: document.getElementById("clearRangeBtn"),
       rangeResultLabel: document.getElementById("rangeResultLabel")
@@ -960,9 +994,14 @@
       return 0;
     }
 
-    async function runMonteCarloForHandsAsync(p1, p2, knownBoard, trials, onProgress, shouldContinue, maxMs) {
+    async function runMonteCarloForHandsAsync(p1, p2, knownBoard, settings, onProgress, shouldContinue) {
+      const trials = settings.maxTrials;
       const knownCount = knownBoard.filter(Boolean).length;
-      if (knownCount >= 2) return runMonteCarloForHands(p1, p2, knownBoard, trials);
+      if (knownCount >= 2) {
+        const exact = runMonteCarloForHands(p1, p2, knownBoard, trials);
+        exact.stopReason = "exact";
+        return exact;
+      }
       const used = new Set([...p1, ...p2, ...knownBoard.filter(Boolean)]);
       const deck = FULL_DECK.filter(c => !used.has(c));
       const missingIdx = [];
@@ -971,7 +1010,7 @@
       const deckLen = deck.length;
 
       let p1w = 0, p2w = 0, ties = 0, done = 0;
-      const deadline = maxMs ? (performance.now() + maxMs) : Infinity;
+      const deadline = settings.maxMs ? (performance.now() + settings.maxMs) : Infinity;
       while (done < trials) {
         const started = performance.now();
         while (done < trials && (performance.now() - started) < 14) {
@@ -988,6 +1027,20 @@
           else ties++;
           done++;
         }
+        if (done >= settings.minTrials) {
+          const ciNow = confidence95FromCounts(p1w, p2w, ties, done);
+          if (ciNow <= settings.targetCi) {
+            const eqNow = equityFromCounts(p1w, p2w, ties, done);
+            return {
+              trials: done,
+              requestedTrials: trials,
+              timedOut: false,
+              stopReason: "target-ci",
+              p1w, p2w, ties,
+              p1Eq: eqNow.p1Eq, p2Eq: eqNow.p2Eq, tiePct: eqNow.tiePct, ci95: eqNow.ci95
+            };
+          }
+        }
         if (performance.now() >= deadline) break;
         if (onProgress) onProgress(done / trials);
         await new Promise(r => setTimeout(r, 0));
@@ -998,6 +1051,7 @@
         trials: done,
         requestedTrials: trials,
         timedOut: done < trials,
+        stopReason: done < trials ? "time-cap" : "max-trials",
         p1w, p2w, ties,
         p1Eq: eq.p1Eq, p2Eq: eq.p2Eq, tiePct: eq.tiePct, ci95: eq.ci95
       };
@@ -1071,6 +1125,7 @@
 
     function render() {
       renderTabs();
+      refreshPrecisionInputs();
       renderCards();
       renderPicker();
       renderTargets();
@@ -1129,6 +1184,46 @@
       const rounded = Math.round(clamped / 1000) * 1000;
       el.rangeSimCountInput.value = String(rounded);
       return rounded;
+    }
+
+    function getCiTargetFraction(inputEl) {
+      const raw = Number(inputEl.value || 0.5);
+      const clamped = Math.min(5, Math.max(0.1, raw));
+      inputEl.value = clamped.toFixed(2);
+      return clamped / 100;
+    }
+
+    function getMaxTimeMs(inputEl) {
+      const raw = Number(inputEl.value || 10);
+      const clamped = Math.min(30, Math.max(1, raw));
+      inputEl.value = String(Math.round(clamped));
+      return Math.round(clamped * 1000);
+    }
+
+    function profileToCi(profile) {
+      if (profile === "fast") return 0.01;
+      if (profile === "precise") return 0.0025;
+      return 0.005;
+    }
+
+    function getExactRunSettings() {
+      const profile = el.exactPrecisionMode.value;
+      const maxTrials = getSimCount();
+      const maxMs = getMaxTimeMs(el.exactMaxTimeInput);
+      const targetCi = profile === "custom" ? getCiTargetFraction(el.exactTargetCiInput) : profileToCi(profile);
+      if (profile !== "custom") el.exactTargetCiInput.value = (targetCi * 100).toFixed(2);
+      const minTrials = Math.min(maxTrials, 10000);
+      return { profile, maxTrials, maxMs, targetCi, minTrials };
+    }
+
+    function getRangeRunSettings() {
+      const profile = el.rangePrecisionMode.value;
+      const maxTrials = getRangeSimCount();
+      const maxMs = getMaxTimeMs(el.rangeMaxTimeInput);
+      const targetCi = profile === "custom" ? getCiTargetFraction(el.rangeTargetCiInput) : profileToCi(profile);
+      if (profile !== "custom") el.rangeTargetCiInput.value = (targetCi * 100).toFixed(2);
+      const minTrials = Math.min(maxTrials, 10000);
+      return { profile, maxTrials, maxMs, targetCi, minTrials };
     }
 
     function parseCardToken(token) {
@@ -1193,7 +1288,8 @@
       return options[options.length - 1];
     }
 
-    async function simulateRangeVsRange(trials, onProgress, shouldContinue) {
+    async function simulateRangeVsRange(settings, onProgress, shouldContinue) {
+      const trials = settings.maxTrials;
       const p1Parsed = parseRangeText(el.rangeP1Input.value);
       if (p1Parsed.error) return { error: `P1: ${p1Parsed.error}` };
       const p2Parsed = parseRangeText(el.rangeP2Input.value);
@@ -1205,6 +1301,7 @@
 
       let p1w = 0, p2w = 0, ties = 0, valid = 0;
       let done = 0;
+      const deadline = settings.maxMs ? (performance.now() + settings.maxMs) : Infinity;
       while (done < trials) {
         const started = performance.now();
         while (done < trials && (performance.now() - started) < 14) {
@@ -1223,6 +1320,18 @@
           }
           done++;
         }
+        if (valid >= settings.minTrials) {
+          const ciNow = confidence95FromCounts(p1w, p2w, ties, valid);
+          if (ciNow <= settings.targetCi) {
+            const p1EqNow = (p1w + ties * 0.5) / valid;
+            const p2EqNow = (p2w + ties * 0.5) / valid;
+            return {
+              valid, requestedTrials: trials, timedOut: false, stopReason: "target-ci",
+              p1w, p2w, ties, p1Eq: p1EqNow, p2Eq: p2EqNow, tiePct: ties / valid, ci95: ciNow
+            };
+          }
+        }
+        if (performance.now() >= deadline) break;
         if (onProgress) onProgress(done / trials);
         await new Promise(r => setTimeout(r, 0));
       }
@@ -1230,7 +1339,10 @@
       const p1Eq = (p1w + ties * 0.5) / valid;
       const p2Eq = (p2w + ties * 0.5) / valid;
       const ci95 = confidence95FromCounts(p1w, p2w, ties, valid);
-      return { valid, p1w, p2w, ties, p1Eq, p2Eq, tiePct: ties / valid, ci95 };
+      return {
+        valid, requestedTrials: trials, timedOut: done < trials, stopReason: done < trials ? "time-cap" : "max-trials",
+        p1w, p2w, ties, p1Eq, p2Eq, tiePct: ties / valid, ci95
+      };
     }
 
     function cardToPretty(card) {
@@ -1282,7 +1394,13 @@
         p2: state.p2,
         board: state.board,
         sim: getSimCount(),
+        epm: el.exactPrecisionMode.value,
+        eci: el.exactTargetCiInput.value,
+        etm: el.exactMaxTimeInput.value,
         rsim: getRangeSimCount(),
+        rpm: el.rangePrecisionMode.value,
+        rci: el.rangeTargetCiInput.value,
+        rtm: el.rangeMaxTimeInput.value,
         rp1: el.rangeP1Input.value || "",
         rp2: el.rangeP2Input.value || "",
         rboard: el.rangeBoardInput.value || ""
@@ -1301,7 +1419,13 @@
         if (Array.isArray(data.p2) && data.p2.length === 4) state.p2 = data.p2;
         if (Array.isArray(data.board) && data.board.length === 5) state.board = data.board;
         if (data.sim) el.simCountInput.value = String(data.sim);
+        if (typeof data.epm === "string") el.exactPrecisionMode.value = data.epm;
+        if (data.eci) el.exactTargetCiInput.value = String(data.eci);
+        if (data.etm) el.exactMaxTimeInput.value = String(data.etm);
         if (data.rsim) el.rangeSimCountInput.value = String(data.rsim);
+        if (typeof data.rpm === "string") el.rangePrecisionMode.value = data.rpm;
+        if (data.rci) el.rangeTargetCiInput.value = String(data.rci);
+        if (data.rtm) el.rangeMaxTimeInput.value = String(data.rtm);
         if (typeof data.rp1 === "string") el.rangeP1Input.value = data.rp1;
         if (typeof data.rp2 === "string") el.rangeP2Input.value = data.rp2;
         if (typeof data.rboard === "string") el.rangeBoardInput.value = data.rboard;
@@ -1320,10 +1444,18 @@
       if (!isExact) el.status.textContent = "Range mode: enter ranges and run simulation.";
     }
 
+    function refreshPrecisionInputs() {
+      const exactCustom = el.exactPrecisionMode.value === "custom";
+      el.exactTargetCiInput.disabled = !exactCustom;
+      const rangeCustom = el.rangePrecisionMode.value === "custom";
+      el.rangeTargetCiInput.disabled = !rangeCustom;
+    }
+
     el.runBtn.addEventListener("click", async () => {
       cancelActiveJobs();
       const jobId = state.activeJobId;
-      const trials = getSimCount();
+      const settings = getExactRunSettings();
+      const trials = settings.maxTrials;
       el.runBtn.disabled = true;
       el.status.textContent = `Running ${trials.toLocaleString()} simulations...`;
       await new Promise(r => setTimeout(r, 20));
@@ -1331,13 +1463,12 @@
         state.p1.slice(),
         state.p2.slice(),
         state.board.slice(),
-        trials,
+        settings,
         (progress) => {
           const pct = Math.floor(progress * 100);
-          el.status.textContent = `Running ${trials.toLocaleString()} simulations... ${pct}%`;
+          el.status.textContent = `Running ${trials.toLocaleString()} simulations... ${pct}% (target CI ${(settings.targetCi * 100).toFixed(2)}%)`;
         },
-        () => state.activeJobId === jobId,
-        9500
+        () => state.activeJobId === jobId
       );
       if (result.error) {
         el.status.textContent = result.error;
@@ -1346,10 +1477,16 @@
       }
       await animateRunoutResult(result);
       const ciPct = (result.ci95 * 100).toFixed(2);
-      const exactTag = result.trials <= 44 ? " (exact)" : "";
+      const exactTag = result.stopReason === "exact" ? " (exact)" : "";
       const sampled = `${result.trials.toLocaleString()}/${(result.requestedTrials || result.trials).toLocaleString()}`;
-      const timeoutTag = result.timedOut ? " (time-capped <10s)" : "";
-      el.status.textContent = `P1 Wins: ${result.p1w} | P2 Wins: ${result.p2w} | Ties: ${result.ties} | Trials: ${sampled} | CI95: +/-${ciPct}%${exactTag}${timeoutTag}`;
+      const reasonMap = {
+        "exact": "exact enumeration",
+        "target-ci": "target CI reached",
+        "time-cap": "time cap reached",
+        "max-trials": "max trials reached"
+      };
+      const reason = reasonMap[result.stopReason] || "completed";
+      el.status.textContent = `P1 ${(result.p1Eq * 100).toFixed(2)}% over ${sampled} trials, CI95 +/-${ciPct}% (${reason})${exactTag}`;
       refreshActionState();
     });
 
@@ -1412,20 +1549,27 @@
     el.runRangeBtn.addEventListener("click", async () => {
       cancelActiveJobs();
       const jobId = state.activeJobId;
-      const trials = getRangeSimCount();
+      const settings = getRangeRunSettings();
+      const trials = settings.maxTrials;
       el.status.textContent = `Running range sim (${trials.toLocaleString()} trials)...`;
-      const result = await simulateRangeVsRange(trials, (progress) => {
+      const result = await simulateRangeVsRange(settings, (progress) => {
         const pct = Math.floor(progress * 100);
-        el.status.textContent = `Running range sim (${trials.toLocaleString()} trials)... ${pct}%`;
+        el.status.textContent = `Running range sim (${trials.toLocaleString()} trials)... ${pct}% (target CI ${(settings.targetCi * 100).toFixed(2)}%)`;
       }, () => state.activeJobId === jobId);
       if (result.error) {
         el.rangeResultLabel.textContent = result.error;
         el.status.textContent = result.error;
         return;
       }
+      const reasonMap = {
+        "target-ci": "target CI reached",
+        "time-cap": "time cap reached",
+        "max-trials": "max trials reached"
+      };
+      const reason = reasonMap[result.stopReason] || "completed";
       el.rangeResultLabel.textContent =
-        `P1 ${(result.p1Eq * 100).toFixed(2)}% | P2 ${(result.p2Eq * 100).toFixed(2)}% | Tie ${(result.tiePct * 100).toFixed(2)}% | CI95 +/-${(result.ci95 * 100).toFixed(2)}% from ${result.valid.toLocaleString()} valid draws`;
-      el.status.textContent = "Range simulation complete.";
+        `P1 ${(result.p1Eq * 100).toFixed(2)}% over ${result.valid.toLocaleString()} trials, CI95 +/-${(result.ci95 * 100).toFixed(2)}% (${reason})`;
+      el.status.textContent = `Range done: P1 ${(result.p1Eq * 100).toFixed(2)}%, CI95 +/-${(result.ci95 * 100).toFixed(2)}% (${reason}).`;
       syncUrlStateSoon();
     });
 
@@ -1444,8 +1588,35 @@
       getRangeSimCount();
       syncUrlStateSoon();
     });
+    el.exactPrecisionMode.addEventListener("change", () => {
+      refreshPrecisionInputs();
+      getExactRunSettings();
+      syncUrlStateSoon();
+    });
+    el.exactTargetCiInput.addEventListener("change", () => {
+      getCiTargetFraction(el.exactTargetCiInput);
+      syncUrlStateSoon();
+    });
+    el.exactMaxTimeInput.addEventListener("change", () => {
+      getMaxTimeMs(el.exactMaxTimeInput);
+      syncUrlStateSoon();
+    });
+    el.rangePrecisionMode.addEventListener("change", () => {
+      refreshPrecisionInputs();
+      getRangeRunSettings();
+      syncUrlStateSoon();
+    });
+    el.rangeTargetCiInput.addEventListener("change", () => {
+      getCiTargetFraction(el.rangeTargetCiInput);
+      syncUrlStateSoon();
+    });
+    el.rangeMaxTimeInput.addEventListener("change", () => {
+      getMaxTimeMs(el.rangeMaxTimeInput);
+      syncUrlStateSoon();
+    });
 
     loadStateFromUrl();
+    refreshPrecisionInputs();
     render();
   </script>
 </body>
