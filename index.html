@@ -192,6 +192,25 @@
       gap: 8px;
       align-items: center;
     }
+    .controls .spacer {
+      flex: 1 1 auto;
+    }
+    .sim-config {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #d8e8e1;
+      font-size: 0.9rem;
+    }
+    .sim-config input {
+      width: 92px;
+      border: 1px solid rgba(255,255,255,0.16);
+      border-radius: 8px;
+      background: #0f1e18;
+      color: #eff7f3;
+      padding: 7px 8px;
+      font-weight: 600;
+    }
 
     button, .pill {
       border: none;
@@ -228,19 +247,27 @@
       padding: 5px 4px;
       text-align: center;
       font-size: 0.84rem;
-      background: rgba(255,255,255,0.03);
+      background: linear-gradient(180deg, rgba(255,255,255,0.1), rgba(255,255,255,0.04));
       user-select: none;
       cursor: pointer;
       transition: transform 0.1s ease, opacity 0.1s ease;
+      font-weight: 650;
     }
     .pick-card:hover { transform: translateY(-1px); }
-    .pick-card.used { opacity: 0.24; cursor: not-allowed; }
+    .pick-card.used { opacity: 0.26; cursor: not-allowed; }
     .pick-card.active-target { outline: 2px solid rgba(255, 209, 102, 0.5); }
+    .pick-card.spades, .pick-card.clubs { color: #f1f6f3; }
+    .pick-card.hearts, .pick-card.diamonds { color: #ff7b7b; }
 
     .status {
       color: #d7e6de;
       font-size: 0.92rem;
       min-height: 1.2rem;
+    }
+    .helper {
+      color: #b9cbc3;
+      font-size: 0.86rem;
+      margin-top: 6px;
     }
 
     .target-bar {
@@ -259,7 +286,7 @@
 
     @media (max-width: 720px) {
       body { padding: 12px; }
-      .slot, .card { width: 48px; height: 68px; }
+      .slot, .card { width: 50px; height: 70px; }
       .picker-grid { gap: 5px; }
       .pick-card { font-size: 0.78rem; padding: 4px 2px; }
     }
@@ -271,6 +298,7 @@
       <div>
         <h1>PLO4 Hand Equity Visualizer</h1>
         <div class="subtitle">Strict Omaha: exactly 2 hole cards + exactly 3 board cards</div>
+        <div class="helper">Tap a slot, then tap a card. Tap a filled slot again to clear it.</div>
       </div>
       <div class="status" id="status">Select cards and click "Run It Out".</div>
     </div>
@@ -308,10 +336,15 @@
       </div>
 
       <div class="controls">
-        <button class="primary" id="runBtn">Run It Out (10,000)</button>
+        <button class="primary" id="runBtn">Run It Out</button>
         <button class="secondary" id="randomFlopBtn">Random Flop</button>
-        <button class="secondary" id="clearBoardBtn">Clear Board</button>
-        <button class="secondary" id="clearAllBtn">Reset All</button>
+        <button class="secondary" id="dealTurnBtn">Deal Turn</button>
+        <button class="secondary" id="dealRiverBtn">Deal River</button>
+        <button class="secondary" id="clearBoardBtn">Clear All</button>
+        <span class="spacer"></span>
+        <label class="sim-config">Simulations
+          <input id="simCountInput" type="number" min="1000" max="100000" step="1000" value="10000" />
+        </label>
       </div>
     </div>
 
@@ -351,8 +384,10 @@
       status: document.getElementById("status"),
       runBtn: document.getElementById("runBtn"),
       randomFlopBtn: document.getElementById("randomFlopBtn"),
+      dealTurnBtn: document.getElementById("dealTurnBtn"),
+      dealRiverBtn: document.getElementById("dealRiverBtn"),
       clearBoardBtn: document.getElementById("clearBoardBtn"),
-      clearAllBtn: document.getElementById("clearAllBtn"),
+      simCountInput: document.getElementById("simCountInput"),
       p1HandLabel: document.getElementById("p1HandLabel"),
       p2HandLabel: document.getElementById("p2HandLabel"),
       eqP1: document.getElementById("eqP1"),
@@ -393,6 +428,10 @@
       slot.dataset.target = targetKey;
       slot.textContent = label;
       slot.addEventListener("click", () => {
+        if (card && state.activeTarget === targetKey) {
+          clearTarget(targetKey);
+          return;
+        }
         state.activeTarget = targetKey;
         render();
       });
@@ -700,7 +739,8 @@
           setEquityUI(0.5, 0.5, 0);
           return;
         }
-        const quick = runMonteCarlo(1800);
+        const quickTrials = Math.min(5000, Math.max(1200, Math.floor(getSimCount() / 4)));
+        const quick = runMonteCarlo(quickTrials);
         if (!quick.error) setEquityUI(quick.p1Eq, quick.p2Eq, quick.tiePct);
       }, 120);
     }
@@ -727,28 +767,67 @@
       renderPicker();
       renderTargets();
       updateHandLabels();
+      refreshActionState();
+    }
+
+    function clearAllCards() {
+      state.p1 = [null, null, null, null];
+      state.p2 = [null, null, null, null];
+      state.board = [null, null, null, null, null];
+      state.activeTarget = "p1-0";
+      setEquityUI(0.5, 0.5, 0);
+      render();
+      el.status.textContent = "All cards cleared.";
+    }
+
+    function getSimCount() {
+      const raw = Number(el.simCountInput.value || 10000);
+      const clamped = Math.min(100000, Math.max(1000, raw));
+      const rounded = Math.round(clamped / 1000) * 1000;
+      el.simCountInput.value = String(rounded);
+      return rounded;
+    }
+
+    function dealBoardCardAt(index) {
+      if (state.board[index]) return false;
+      const used = usedCardsSet();
+      const deck = fullDeck().filter(c => !used.has(c));
+      if (!deck.length) return false;
+      const j = Math.floor(Math.random() * deck.length);
+      state.board[index] = deck[j];
+      return true;
+    }
+
+    function refreshActionState() {
+      const bothReady = state.p1.every(Boolean) && state.p2.every(Boolean);
+      el.runBtn.disabled = !bothReady;
+      el.dealTurnBtn.disabled = !state.board[0] || !state.board[1] || !state.board[2] || Boolean(state.board[3]);
+      el.dealRiverBtn.disabled = !Boolean(state.board[3]) || Boolean(state.board[4]);
+      if (!bothReady) {
+        const p1Missing = state.p1.filter(c => !c).length;
+        const p2Missing = state.p2.filter(c => !c).length;
+        el.status.textContent = `Set hole cards to run: P1 missing ${p1Missing}, P2 missing ${p2Missing}.`;
+      }
     }
 
     el.runBtn.addEventListener("click", async () => {
+      const trials = getSimCount();
       el.runBtn.disabled = true;
-      el.status.textContent = "Running 10,000 simulations...";
+      el.status.textContent = `Running ${trials.toLocaleString()} simulations...`;
       await new Promise(r => setTimeout(r, 20));
-      const result = runMonteCarlo(10000);
+      const result = runMonteCarlo(trials);
       if (result.error) {
         el.status.textContent = result.error;
-        el.runBtn.disabled = false;
+        refreshActionState();
         return;
       }
       await animateRunoutResult(result);
       el.status.textContent = `P1 Wins: ${result.p1w} | P2 Wins: ${result.p2w} | Ties: ${result.ties}`;
-      el.runBtn.disabled = false;
+      refreshActionState();
     });
 
     el.clearBoardBtn.addEventListener("click", () => {
-      state.board = [null, null, null, null, null];
-      scheduleLiveUpdate();
-      render();
-      el.status.textContent = "Board cleared.";
+      clearAllCards();
     });
 
     el.randomFlopBtn.addEventListener("click", () => {
@@ -767,14 +846,25 @@
       el.status.textContent = "Flop dealt.";
     });
 
-    el.clearAllBtn.addEventListener("click", () => {
-      state.p1 = [null, null, null, null];
-      state.p2 = [null, null, null, null];
-      state.board = [null, null, null, null, null];
-      state.activeTarget = "p1-0";
-      setEquityUI(0.5, 0.5, 0);
-      render();
-      el.status.textContent = "All cards reset.";
+    el.dealTurnBtn.addEventListener("click", () => {
+      if (dealBoardCardAt(3)) {
+        scheduleLiveUpdate();
+        render();
+        el.status.textContent = "Turn dealt.";
+      }
+    });
+
+    el.dealRiverBtn.addEventListener("click", () => {
+      if (dealBoardCardAt(4)) {
+        scheduleLiveUpdate();
+        render();
+        el.status.textContent = "River dealt.";
+      }
+    });
+
+    el.simCountInput.addEventListener("change", () => {
+      getSimCount();
+      scheduleLiveUpdate();
     });
 
     render();
