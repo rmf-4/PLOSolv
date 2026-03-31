@@ -30,8 +30,9 @@
         radial-gradient(1100px 640px at 18% 12%, #1b5d49 0%, transparent 46%),
         radial-gradient(1000px 600px at 82% 8%, #164b3b 0%, transparent 44%),
         linear-gradient(180deg, #05110d, var(--bg) 45%, #040906);
-      height: 100dvh;
-      overflow: hidden;
+      min-height: 100dvh;
+      overflow-x: hidden;
+      overflow-y: auto;
       padding: 10px;
     }
 
@@ -40,8 +41,9 @@
       margin: 0 auto;
       display: grid;
       gap: 8px;
-      height: calc(100dvh - 20px);
-      grid-template-rows: auto auto minmax(0, 1fr);
+      min-height: calc(100dvh - 20px);
+      height: auto;
+      grid-template-rows: auto auto auto;
     }
 
     .header {
@@ -295,17 +297,13 @@
     .pill.active { background: #3a5d4f; border-color: rgba(255,255,255,0.24); }
 
     .table, .picker {
-      overflow: hidden;
+      overflow: visible;
     }
     #reviewTabPanel {
       display: grid;
       gap: 8px;
       grid-auto-rows: max-content;
-      min-height: 0;
-      overflow-y: auto;
-      overflow-x: hidden;
-      padding-right: 4px;
-      overscroll-behavior-y: auto;
+      overflow: visible;
     }
 
     .tabs {
@@ -356,8 +354,6 @@
       font-size: 0.8rem;
       display: grid;
       gap: 4px;
-      max-height: 100px;
-      overflow: auto;
     }
     .explorer-item {
       display: flex;
@@ -371,7 +367,7 @@
       display: grid;
       gap: 8px;
       grid-template-columns: 1fr 1fr;
-      align-items: start;
+      align-items: stretch;
     }
     .review-card {
       background: rgba(255,255,255,0.03);
@@ -380,7 +376,8 @@
       padding: 8px;
       font-size: 0.82rem;
       color: #e0efe8;
-      min-height: 0;
+      display: flex;
+      flex-direction: column;
     }
     .review-players-grid {
       display: grid;
@@ -414,15 +411,9 @@
     }
     .timeline-list {
       display: block;
-      height: clamp(220px, 34vh, 420px);
-      overflow-y: auto;
-      overflow-x: hidden;
-      overscroll-behavior: auto;
       margin-top: 6px;
-      padding-right: 2px;
-      padding-bottom: 10px;
-      scroll-padding-bottom: 10px;
-      -webkit-overflow-scrolling: touch;
+      padding-bottom: 4px;
+      overflow: visible;
     }
     .timeline-item {
       display: flex;
@@ -441,14 +432,8 @@
       display: block;
       font-size: 0.8rem;
       color: #dcebe4;
-      height: clamp(220px, 34vh, 420px);
-      overflow-y: auto;
-      overflow-x: hidden;
-      overscroll-behavior: auto;
-      padding-right: 2px;
-      padding-bottom: 10px;
-      scroll-padding-bottom: 10px;
-      -webkit-overflow-scrolling: touch;
+      padding-bottom: 4px;
+      overflow: visible;
     }
     .coach-list > div {
       margin-bottom: 5px;
@@ -460,8 +445,7 @@
 
     .picker {
       display: grid;
-      grid-template-rows: auto auto 1fr;
-      min-height: 0;
+      grid-template-rows: auto auto auto;
     }
 
     .picker-grid {
@@ -505,9 +489,6 @@
         gap: 3px;
       }
       .review-row span:last-child { font-size: 0.76rem; }
-      .timeline-list, .coach-list {
-        height: min(46vh, 340px);
-      }
     }
   </style>
 </head>
@@ -668,7 +649,7 @@
         <h2>Street Odds (P1 vs P2)</h2>
         <div class="explorer-results" id="reviewStreetResults"></div>
       </div>
-      <div class="review-grid">
+      <div class="review-grid review-bottom-grid">
         <div class="review-card">
           <div><strong>Action + Pot Timeline</strong></div>
           <div class="timeline-list" id="reviewTimeline"></div>
