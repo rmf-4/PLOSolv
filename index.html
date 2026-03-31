@@ -310,16 +310,25 @@
       display: flex;
       gap: 6px;
       flex-wrap: wrap;
+      align-items: center;
     }
     .tab-btn {
       border: 1px solid rgba(255,255,255,0.12);
       background: #162721;
       color: #d9ebe3;
-      padding: 7px 11px;
+      padding: 0 11px;
       border-radius: 9px;
       font-size: 0.82rem;
       font-weight: 650;
       cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 32px;
+      min-height: 32px;
+      width: auto;
+      flex: 0 0 auto;
+      white-space: nowrap;
     }
     .tab-btn.active {
       background: #2a4d40;
@@ -469,7 +478,7 @@
       .header { padding: 10px; }
       .status { max-width: 100%; text-align: left; }
       .tabs { gap: 8px; }
-      .tab-btn { flex: 1 1 30%; min-width: 120px; text-align: center; }
+      .tab-btn { flex: 0 0 auto; min-width: 0; text-align: center; }
       .controls { gap: 8px; }
       .controls .spacer { display: none; }
       .sim-config {
