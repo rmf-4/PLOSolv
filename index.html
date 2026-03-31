@@ -403,7 +403,7 @@
     .timeline-list {
       display: grid;
       gap: 4px;
-      max-height: 180px;
+      max-height: 150px;
       overflow: auto;
       margin-top: 6px;
     }
@@ -424,6 +424,8 @@
       gap: 5px;
       font-size: 0.8rem;
       color: #dcebe4;
+      max-height: 150px;
+      overflow: auto;
     }
     @media (max-width: 900px) {
       .range-grid { grid-template-columns: 1fr; }
@@ -1655,30 +1657,71 @@
       const seatToName = new Map(players.map(p => [p.seat, p.name]));
       const timeline = [];
       let pot = 0;
+      let streetContrib = new Map();
+      let streetIndex = 0;
+      function addContribution(seat, targetTotal) {
+        const prev = streetContrib.get(seat) || 0;
+        const delta = Math.max(0, targetTotal - prev);
+        if (delta > 0) {
+          pot += delta;
+          streetContrib.set(seat, targetTotal);
+        }
+      }
       for (const ev of data.events || []) {
         const p = ev.payload || {};
         const seatName = p.seat ? (seatToName.get(p.seat) || `Seat ${p.seat}`) : null;
         const value = Number(p.value || 0);
         let label = null;
-        if (p.type === 2) label = `${seatName || "Player"} posts blind ${value}`;
-        else if (p.type === 3) label = `${seatName || "Player"} posts blind/ante ${value}`;
-        else if (p.type === 7) label = `${seatName || "Player"} calls ${value}${p.allIn ? " (all-in)" : ""}`;
-        else if (p.type === 8) label = `${seatName || "Player"} bets/raises to ${value}${p.allIn ? " (all-in)" : ""}`;
+        if (p.type === 2) {
+          label = `${seatName || "Player"} posts blind ${value}`;
+          if (p.seat) addContribution(p.seat, value);
+        } else if (p.type === 3) {
+          label = `${seatName || "Player"} posts blind/ante ${value}`;
+          if (p.seat) addContribution(p.seat, value);
+        } else if (p.type === 7) {
+          label = `${seatName || "Player"} calls ${value}${p.allIn ? " (all-in)" : ""}`;
+          if (p.seat) addContribution(p.seat, value);
+        } else if (p.type === 8) {
+          label = `${seatName || "Player"} bets/raises to ${value}${p.allIn ? " (all-in)" : ""}`;
+          if (p.seat) addContribution(p.seat, value);
+        }
         else if (p.type === 11) label = `${seatName || "Player"} folds`;
         else if (p.type === 9) {
           const streetMap = { 1: "Flop", 2: "Turn", 3: "River" };
           const cards = Array.isArray(p.cards) ? p.cards.map(cardToPretty).join(" ") : "";
           label = `Board ${streetMap[p.turn] || `Turn ${p.turn}`}${p.run ? ` (Run ${p.run})` : ""}: ${cards}`;
+          const nextStreetIndex = Number(p.turn || streetIndex + 1);
+          if (nextStreetIndex !== streetIndex) {
+            streetContrib = new Map();
+            streetIndex = nextStreetIndex;
+          }
         } else if (p.type === 10) {
           const winner = seatName || `Seat ${p.seat}`;
           label = `${winner} wins ${value} with ${p.handDescription || "showdown hand"}`;
+          if (Number.isFinite(Number(p.pot)) && Number(p.pot) > 0) pot = Number(p.pot);
         }
         if (!label) continue;
-        if ([2, 3, 7, 8].includes(p.type)) pot += value;
-        if (p.type === 10) pot = Math.max(0, pot - value);
         timeline.push({ label, pot });
       }
       return timeline;
+    }
+
+    function detectHeroAllInStreet(review, heroIdx) {
+      const heroSeat = review.players?.[heroIdx]?.seat;
+      if (!heroSeat || !review.data?.events) return null;
+      let street = "Preflop";
+      for (const ev of review.data.events) {
+        const p = ev.payload || {};
+        if (p.type === 9 && Number(p.run) === 1) {
+          if (p.turn === 1) street = "Flop";
+          else if (p.turn === 2) street = "Turn";
+          else if (p.turn === 3) street = "River";
+        }
+        if ((p.type === 7 || p.type === 8) && p.seat === heroSeat && p.allIn) {
+          return street;
+        }
+      }
+      return null;
     }
 
     function buildCoachNotes(review, heroIdx) {
@@ -1692,6 +1735,7 @@
       const leaderIdx = pre.equities.indexOf(Math.max(...pre.equities));
       const heroName = review.players[heroIdx]?.name || `P${heroIdx + 1}`;
       const heroPre = pre.equities[heroIdx] || 0;
+      const heroAllInStreet = detectHeroAllInStreet(review, heroIdx);
       notes.push(`You are ${heroName} (P${heroIdx + 1}). Preflop equity: ${(heroPre * 100).toFixed(1)}%.`);
       notes.push(`Table preflop favorite: P${leaderIdx + 1} at ${(pre.equities[leaderIdx] * 100).toFixed(1)}%.`);
       function swing(from, to, streetName) {
@@ -1717,8 +1761,10 @@
       const heroTurn = turn ? turn.equities[heroIdx] : heroFlop;
       const heroRiver = river ? river.equities[heroIdx] : heroTurn;
       const heroNet = heroRiver - heroPre;
-      if (heroNet <= -0.1) {
+      if (heroNet <= -0.1 && !heroAllInStreet) {
         notes.push(`Mistake alert: your equity dropped ${Math.abs(heroNet * 100).toFixed(1)} points from preflop to river; likely over-continuing a dominated line.`);
+      } else if (heroNet <= -0.1 && heroAllInStreet) {
+        notes.push(`Variance note: you were all-in on ${heroAllInStreet}, then equity ran against you by ${Math.abs(heroNet * 100).toFixed(1)} points (possible suckout sequence).`);
       } else if (heroNet >= 0.1) {
         notes.push(`Good realization: your line gained ${Math.abs(heroNet * 100).toFixed(1)} points from preflop to river.`);
       } else {
