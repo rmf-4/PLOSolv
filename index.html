@@ -1975,6 +1975,23 @@
       return null;
     }
 
+    function detectHeroShowdownResult(review, heroIdx) {
+      const heroSeat = review.players?.[heroIdx]?.seat;
+      if (!heroSeat || !review.data?.events) return { won: false, split: false };
+      const wins = [];
+      for (const ev of review.data.events) {
+        const p = ev.payload || {};
+        if (p.type === 10 && p.seat != null && Number(p.value || 0) > 0) {
+          wins.push(String(p.seat));
+        }
+      }
+      if (!wins.length) return { won: false, split: false };
+      const heroKey = String(heroSeat);
+      const heroWins = wins.filter(s => s === heroKey).length;
+      const uniqueWinners = new Set(wins);
+      return { won: heroWins > 0, split: uniqueWinners.size > 1 };
+    }
+
     function buildCoachNotes(review, heroIdx) {
       const notes = [];
       const run1 = review.results.filter(r => normalizeReviewRunKey(r.run) === 1);
@@ -2043,11 +2060,11 @@
       else if (turnAllIn) commitEq = heroTurn;
       else if (riverAllIn) commitEq = heroRiver;
 
-      let heroWonShowdown = false;
+      const heroShowdown = detectHeroShowdownResult(review, heroIdx);
+      let heroWonShowdown = heroShowdown.won;
       if (river) {
         const maxEq = Math.max(...river.equities);
         const winners = river.equities.map((v, i) => ({ v, i })).filter(x => Math.abs(x.v - maxEq) < 1e-9);
-        heroWonShowdown = winners.some(w => w.i === heroIdx);
         if (winners.length > 1) notes.push(`River finishes as chopped equity between ${winners.map(w => `P${w.i + 1}`).join(", ")}.`);
         else notes.push(`River winner by equity: P${winners[0].i + 1} (${(maxEq * 100).toFixed(1)}%).`);
       }
@@ -2070,7 +2087,7 @@
         } else if (river && commitEq < 0.40 && !heroWonShowdown) {
           verdict = `VERDICT: Thin stack-off on the ${ship}; expect this class of spot to burn EV over time.`;
         } else if (river && commitEq >= 0.60 && !heroWonShowdown && heroRiver <= 0.15) {
-          verdict = `VERDICT: You committed with plenty of equity on the ${ship}; losing here is mostly a bad runout.`;
+          verdict = `VERDICT: You got sucked out on after committing strong on the ${ship}; this loss is mostly runout variance.`;
         } else if (river && commitEq >= 0.60 && heroWonShowdown) {
           verdict = `VERDICT: Commitment looked strong on the ${ship}; winning mostly aligns with you having the best of it.`;
         } else {
@@ -2098,8 +2115,9 @@
         } else if (heroAllInStreet && (preflopAllIn || flopAllIn || turnAllIn) && commitEq < 0.35 && !heroWonShowdown) {
           headline.push("Actionable: tighten commitment threshold or insist on better price before stacking as a clear underdog.");
         } else if (heroAllInStreet && (preflopAllIn || flopAllIn || turnAllIn) && commitEq >= 0.55 && !heroWonShowdown && heroRiver < 0.2) {
-          headline.push("Actionable: no shame in the loss — focus on whether stack-off range was defensible, not the ugly river.");
+          headline.push("Actionable: you got sucked out on — keep evaluating whether the stack-off was +EV, not whether this river cooperated.");
         }
+        if (heroShowdown.split) headline.push("Outcome note: multiple winners were paid, so result is a split/partial chop spot.");
       }
 
       const band = (x) => x >= 0.58 ? "pressure/value-heavy" : (x >= 0.42 ? "mixed realization" : "defensive / fold-heavy");
