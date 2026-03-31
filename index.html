@@ -1507,8 +1507,21 @@
           updateEquityFromWinners(counts, winners);
           trials++;
         }
+      } else if (knownCount === 3) {
+        // Flop spots are fast enough to solve exactly (all turn+river pairs).
+        const deck = FULL_DECK.filter(c => !used.has(c));
+        for (let i = 0; i < deck.length - 1; i++) {
+          for (let j = i + 1; j < deck.length; j++) {
+            const board = knownBoard.slice();
+            board[3] = deck[i];
+            board[4] = deck[j];
+            const winners = evaluateRunoutWinners(hands, board);
+            updateEquityFromWinners(counts, winners);
+            trials++;
+          }
+        }
       } else {
-        const maxTrials = settings.maxTrials;
+        const maxTrials = knownCount <= 1 ? settings.maxTrials : Math.min(settings.maxTrials, 40000);
         const deck = FULL_DECK.filter(c => !used.has(c));
         const missingIdx = [];
         for (let i = 0; i < 5; i++) if (!knownBoard[i]) missingIdx.push(i);
@@ -1556,16 +1569,15 @@
       const runs = extractRunBoards(data);
       const baseStreets = [{ name: "Preflop", cards: [] }];
       const allResults = [];
+      // Preflop is identical across all runouts; solve once and reuse.
+      const preflop = runEquityForManyHands(players, makeBoardFromCards([]), settings);
+      if (preflop.error) throw new Error(preflop.error);
       if (!runs.length) {
-        for (const st of baseStreets) {
-          const board = makeBoardFromCards(st.cards);
-          const r = runEquityForManyHands(players, board, settings);
-          if (r.error) throw new Error(r.error);
-          allResults.push({ run: null, street: st.name, board: st.cards, ...r });
-        }
+        allResults.push({ run: null, street: "Preflop", board: [], ...preflop });
       } else {
+        allResults.push({ run: 0, street: "Preflop", board: [], ...preflop });
         for (const runData of runs) {
-          const streets = [{ name: "Preflop", cards: [] }];
+          const streets = [];
           if (runData.flop?.length >= 3) streets.push({ name: "Flop", cards: runData.flop });
           if (runData.turn?.length >= 4) streets.push({ name: "Turn", cards: runData.turn });
           if (runData.river?.length >= 5) streets.push({ name: "River", cards: runData.river });
