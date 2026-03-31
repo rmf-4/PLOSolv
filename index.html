@@ -643,6 +643,12 @@
         </div>
         <div class="review-card">
           <div><strong>Coach Mode</strong></div>
+          <div class="sim-config" style="margin-top:6px;">
+            <span>You are</span>
+            <select id="reviewHeroSelect">
+              <option value="">Choose player</option>
+            </select>
+          </div>
           <div class="coach-list" id="reviewCoach"></div>
         </div>
       </div>
@@ -668,7 +674,8 @@
       activeTarget: "p1-0",
       liveTimer: null,
       tab: "exact",
-      activeJobId: 0
+      activeJobId: 0,
+      lastReview: null
     };
 
     const el = {
@@ -722,7 +729,8 @@
       reviewPlayersGrid: document.getElementById("reviewPlayersGrid"),
       reviewStreetResults: document.getElementById("reviewStreetResults"),
       reviewTimeline: document.getElementById("reviewTimeline"),
-      reviewCoach: document.getElementById("reviewCoach")
+      reviewCoach: document.getElementById("reviewCoach"),
+      reviewHeroSelect: document.getElementById("reviewHeroSelect")
     };
 
     function fullDeck() {
@@ -1673,7 +1681,7 @@
       return timeline;
     }
 
-    function buildCoachNotes(review) {
+    function buildCoachNotes(review, heroIdx) {
       const notes = [];
       const run1 = review.results.filter(r => r.run === 1 || (r.run == null && r.street !== "Preflop"));
       const pre = review.results.find(r => r.street === "Preflop");
@@ -1682,7 +1690,10 @@
       const river = run1.find(r => r.street === "River");
       if (!pre) return ["No preflop equity data available."];
       const leaderIdx = pre.equities.indexOf(Math.max(...pre.equities));
-      notes.push(`Preflop favorite: P${leaderIdx + 1} at ${(pre.equities[leaderIdx] * 100).toFixed(1)}%.`);
+      const heroName = review.players[heroIdx]?.name || `P${heroIdx + 1}`;
+      const heroPre = pre.equities[heroIdx] || 0;
+      notes.push(`You are ${heroName} (P${heroIdx + 1}). Preflop equity: ${(heroPre * 100).toFixed(1)}%.`);
+      notes.push(`Table preflop favorite: P${leaderIdx + 1} at ${(pre.equities[leaderIdx] * 100).toFixed(1)}%.`);
       function swing(from, to, streetName) {
         if (!from || !to) return;
         let bestI = 0;
@@ -1702,14 +1713,50 @@
       swing(pre, flop, "Flop");
       swing(flop || pre, turn, "Turn");
       swing(turn || flop || pre, river, "River");
+      const heroFlop = flop ? flop.equities[heroIdx] : heroPre;
+      const heroTurn = turn ? turn.equities[heroIdx] : heroFlop;
+      const heroRiver = river ? river.equities[heroIdx] : heroTurn;
+      const heroNet = heroRiver - heroPre;
+      if (heroNet <= -0.1) {
+        notes.push(`Mistake alert: your equity dropped ${Math.abs(heroNet * 100).toFixed(1)} points from preflop to river; likely over-continuing a dominated line.`);
+      } else if (heroNet >= 0.1) {
+        notes.push(`Good realization: your line gained ${Math.abs(heroNet * 100).toFixed(1)} points from preflop to river.`);
+      } else {
+        notes.push("Near-GTO stability: your overall equity stayed relatively stable across streets.");
+      }
       if (river) {
         const maxEq = Math.max(...river.equities);
         const winners = river.equities.map((v, i) => ({ v, i })).filter(x => Math.abs(x.v - maxEq) < 1e-9);
+        const heroWon = winners.some(w => w.i === heroIdx);
         if (winners.length > 1) notes.push(`River finishes as chopped equity between ${winners.map(w => `P${w.i + 1}`).join(", ")}.`);
         else notes.push(`River winner by equity: P${winners[0].i + 1} (${(maxEq * 100).toFixed(1)}%).`);
+        if (!heroWon && heroRiver < 0.2) {
+          notes.push("Coach: this line trends non-optimal for your seat; prefer tighter continues vs this action path.");
+        } else if (heroWon && heroRiver > 0.5) {
+          notes.push("Coach: strong value-realization line for your seat; this is close to a GTO-favored outcome.");
+        }
       }
       if (notes.length < 2) notes.push("Action likely standard; no major equity swing detected.");
       return notes;
+    }
+
+    function renderCoachForHero() {
+      if (!state.lastReview) return;
+      const review = state.lastReview;
+      const heroIdx = Number(el.reviewHeroSelect.value);
+      el.reviewCoach.innerHTML = "";
+      if (!Number.isInteger(heroIdx) || heroIdx < 0 || heroIdx >= review.players.length) {
+        const line = document.createElement("div");
+        line.textContent = "- Choose your player above to get personalized feedback.";
+        el.reviewCoach.appendChild(line);
+        return;
+      }
+      const notes = buildCoachNotes(review, heroIdx);
+      for (const n of notes) {
+        const line = document.createElement("div");
+        line.textContent = `- ${n}`;
+        el.reviewCoach.appendChild(line);
+      }
     }
 
     function extractRunBoards(data) {
@@ -2076,6 +2123,14 @@
         el.reviewPlayers.textContent = `Players involved (${review.players.length}): ${review.players.map(p => p.name).join(", ")}`;
         el.reviewTimeline.innerHTML = "";
         el.reviewCoach.innerHTML = "";
+        state.lastReview = review;
+        el.reviewHeroSelect.innerHTML = '<option value="">Choose player</option>';
+        review.players.forEach((p, i) => {
+          const opt = document.createElement("option");
+          opt.value = String(i);
+          opt.textContent = `P${i + 1} ${p.name}`;
+          el.reviewHeroSelect.appendChild(opt);
+        });
         el.reviewPlayersGrid.innerHTML = "";
         review.players.forEach((p, i) => {
           const box = document.createElement("div");
@@ -2142,20 +2197,21 @@
           }
         }
 
-        const notes = buildCoachNotes(review);
-        for (const n of notes) {
-          const line = document.createElement("div");
-          line.textContent = `- ${n}`;
-          el.reviewCoach.appendChild(line);
-        }
+        renderCoachForHero();
 
         el.status.textContent = "PokerNow review complete.";
       } catch (err) {
         el.reviewSummary.textContent = `Analysis failed: ${err.message}`;
+        state.lastReview = null;
+        el.reviewHeroSelect.innerHTML = '<option value="">Choose player</option>';
         el.reviewTimeline.innerHTML = "";
         el.reviewCoach.innerHTML = "";
         el.status.textContent = `Review error: ${err.message}`;
       }
+    });
+
+    el.reviewHeroSelect.addEventListener("change", () => {
+      renderCoachForHero();
     });
 
     loadStateFromUrl();
