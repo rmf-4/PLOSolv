@@ -372,6 +372,23 @@
       font-size: 0.82rem;
       color: #e0efe8;
     }
+    .review-players-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .review-player-box {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px;
+      padding: 7px;
+    }
+    .review-player-name {
+      font-size: 0.8rem;
+      color: #dcebe4;
+      margin-bottom: 6px;
+    }
     .review-row {
       display: flex;
       justify-content: space-between;
@@ -559,6 +576,7 @@
         <div class="review-card">
           <div><strong>Players</strong></div>
           <div class="review-mono" id="reviewPlayers">-</div>
+          <div class="review-players-grid" id="reviewPlayersGrid"></div>
         </div>
       </div>
       <div class="board-panel">
@@ -637,6 +655,7 @@
       reviewAnalyzeBtn: document.getElementById("reviewAnalyzeBtn"),
       reviewSummary: document.getElementById("reviewSummary"),
       reviewPlayers: document.getElementById("reviewPlayers"),
+      reviewPlayersGrid: document.getElementById("reviewPlayersGrid"),
       reviewStreetResults: document.getElementById("reviewStreetResults")
     };
 
@@ -1431,16 +1450,15 @@
           if (!revealMap.has(p.seat)) revealMap.set(p.seat, p.cards);
         }
       }
-      const entries = [...revealMap.entries()].slice(0, 2);
-      if (entries.length < 2) {
-        const fromPlayers = (data.players || []).filter(pl => Array.isArray(pl.hand) && pl.hand.length === 4).slice(0, 2);
-        if (fromPlayers.length === 2) {
-          return [
-            { seat: fromPlayers[0].seat, name: fromPlayers[0].name || `Seat ${fromPlayers[0].seat}`, cards: fromPlayers[0].hand },
-            { seat: fromPlayers[1].seat, name: fromPlayers[1].name || `Seat ${fromPlayers[1].seat}`, cards: fromPlayers[1].hand }
-          ];
-        }
-        return null;
+      const entries = [...revealMap.entries()];
+      if (!entries.length) {
+        const fromPlayers = (data.players || []).filter(pl => Array.isArray(pl.hand) && pl.hand.length === 4);
+        if (!fromPlayers.length) return null;
+        return fromPlayers.map(pl => ({
+          seat: pl.seat,
+          name: pl.name || `Seat ${pl.seat}`,
+          cards: pl.hand
+        }));
       }
       return entries.map(([seat, cards]) => {
         const pl = (data.players || []).find(x => x.seat === seat);
@@ -1448,18 +1466,84 @@
       });
     }
 
-    function extractRun1Boards(data) {
-      const run1 = (data.events || [])
+    function evaluateRunoutWinners(hands, board) {
+      const evals = hands.map(h => bestOmahaHand(h.cards, board));
+      let best = evals[0];
+      let winners = [0];
+      for (let i = 1; i < evals.length; i++) {
+        const c = cmpEval(evals[i], best);
+        if (c > 0) {
+          best = evals[i];
+          winners = [i];
+        } else if (c === 0) {
+          winners.push(i);
+        }
+      }
+      return winners;
+    }
+
+    function updateEquityFromWinners(counts, winners) {
+      const share = 1 / winners.length;
+      for (const i of winners) counts[i] += share;
+    }
+
+    function runEquityForManyHands(hands, knownBoard, settings) {
+      const used = new Set([...knownBoard.filter(Boolean), ...hands.flatMap(h => h.cards)]);
+      if (used.size !== knownBoard.filter(Boolean).length + hands.length * 4) return { error: "Duplicate cards detected in player hands/board." };
+      const knownCount = knownBoard.filter(Boolean).length;
+      const counts = Array(hands.length).fill(0);
+      let trials = 0;
+
+      if (knownCount === 5) {
+        const winners = evaluateRunoutWinners(hands, knownBoard);
+        updateEquityFromWinners(counts, winners);
+        trials = 1;
+      } else if (knownCount === 4) {
+        const deck = FULL_DECK.filter(c => !used.has(c));
+        for (const river of deck) {
+          const board = knownBoard.slice();
+          board[4] = river;
+          const winners = evaluateRunoutWinners(hands, board);
+          updateEquityFromWinners(counts, winners);
+          trials++;
+        }
+      } else {
+        const maxTrials = settings.maxTrials;
+        const deck = FULL_DECK.filter(c => !used.has(c));
+        const missingIdx = [];
+        for (let i = 0; i < 5; i++) if (!knownBoard[i]) missingIdx.push(i);
+        for (let t = 0; t < maxTrials; t++) {
+          const board = knownBoard.slice();
+          const picks = sampleUniqueIndices(deck.length, missingIdx.length);
+          for (let i = 0; i < missingIdx.length; i++) board[missingIdx[i]] = deck[picks[i]];
+          const winners = evaluateRunoutWinners(hands, board);
+          updateEquityFromWinners(counts, winners);
+          trials++;
+        }
+      }
+      const equities = counts.map(v => v / trials);
+      return { trials, equities };
+    }
+
+    function extractRunBoards(data) {
+      const boardEvents = (data.events || [])
         .map(e => e.payload || {})
-        .filter(p => p.type === 9 && p.run === 1);
-      const flopEvt = run1.find(p => p.turn === 1 && Array.isArray(p.cards) && p.cards.length >= 3);
-      const turnEvt = run1.find(p => p.turn === 2 && Array.isArray(p.cards) && p.cards.length >= 1);
-      const riverEvt = run1.find(p => p.turn === 3 && Array.isArray(p.cards) && p.cards.length >= 1);
-      if (!flopEvt) return null;
-      const flop = flopEvt.cards.slice(0, 3);
-      const turn = turnEvt ? [...flop, turnEvt.cards[0]] : flop.slice();
-      const river = riverEvt ? [...turn, riverEvt.cards[0]] : turn.slice();
-      return { flop, turn, river };
+        .filter(p => p.type === 9 && p.run && p.turn && Array.isArray(p.cards));
+      const runMap = new Map();
+      for (const evt of boardEvents) {
+        if (!runMap.has(evt.run)) runMap.set(evt.run, {});
+        const o = runMap.get(evt.run);
+        o[evt.turn] = evt.cards.slice();
+      }
+      const runs = [];
+      for (const [run, turns] of [...runMap.entries()].sort((a, b) => a[0] - b[0])) {
+        if (!turns[1] || turns[1].length < 3) continue;
+        const flop = turns[1].slice(0, 3);
+        const turn = turns[2] && turns[2][0] ? [...flop, turns[2][0]] : flop.slice();
+        const river = turns[3] && turns[3][0] ? [...turn, turns[3][0]] : turn.slice();
+        runs.push({ run, flop, turn, river });
+      }
+      return runs;
     }
 
     async function analyzePokerNowSharedHand(handId) {
@@ -1467,22 +1551,33 @@
       if (!res.ok) throw new Error(`Unable to fetch hand (${res.status})`);
       const data = await res.json();
       const players = extractReviewPlayers(data);
-      if (!players) throw new Error("Could not locate two revealed 4-card hands in this hand.");
-      const boards = extractRun1Boards(data);
-      const streets = [{ name: "Preflop", cards: [] }];
-      if (boards?.flop?.length >= 3) streets.push({ name: "Flop", cards: boards.flop });
-      if (boards?.turn?.length >= 4) streets.push({ name: "Turn", cards: boards.turn });
-      if (boards?.river?.length >= 5) streets.push({ name: "River", cards: boards.river });
-
+      if (!players || players.length < 2) throw new Error("Need at least two revealed 4-card hands in this hand.");
       const settings = { maxTrials: 80000, minTrials: 10000, maxMs: 2500, targetCi: 0.005 };
-      const results = [];
-      for (const st of streets) {
-        const board = makeBoardFromCards(st.cards);
-        const r = await runMonteCarloForHandsAsync(players[0].cards, players[1].cards, board, settings);
-        if (r.error) throw new Error(r.error);
-        results.push({ street: st.name, board: st.cards, ...r });
+      const runs = extractRunBoards(data);
+      const baseStreets = [{ name: "Preflop", cards: [] }];
+      const allResults = [];
+      if (!runs.length) {
+        for (const st of baseStreets) {
+          const board = makeBoardFromCards(st.cards);
+          const r = runEquityForManyHands(players, board, settings);
+          if (r.error) throw new Error(r.error);
+          allResults.push({ run: null, street: st.name, board: st.cards, ...r });
+        }
+      } else {
+        for (const runData of runs) {
+          const streets = [{ name: "Preflop", cards: [] }];
+          if (runData.flop?.length >= 3) streets.push({ name: "Flop", cards: runData.flop });
+          if (runData.turn?.length >= 4) streets.push({ name: "Turn", cards: runData.turn });
+          if (runData.river?.length >= 5) streets.push({ name: "River", cards: runData.river });
+          for (const st of streets) {
+            const board = makeBoardFromCards(st.cards);
+            const r = runEquityForManyHands(players, board, settings);
+            if (r.error) throw new Error(r.error);
+            allResults.push({ run: runData.run, street: st.name, board: st.cards, ...r });
+          }
+        }
       }
-      return { data, players, results };
+      return { data, players, runs, results: allResults };
     }
 
     function runoutExplorer() {
@@ -1771,22 +1866,60 @@
       el.reviewStreetResults.innerHTML = "";
       try {
         const review = await analyzePokerNowSharedHand(handId);
-        const p1 = review.players[0];
-        const p2 = review.players[1];
-        el.reviewSummary.textContent = `Hand #${review.data.number || "?"} | Blinds ${review.data.smallBlind}/${review.data.bigBlind} | Source run: #1`;
-        el.reviewPlayers.textContent =
-          `P1 ${p1.name} (${p1.cards.map(cardToPretty).join(" ")}) vs P2 ${p2.name} (${p2.cards.map(cardToPretty).join(" ")})`;
+        const runTxt = review.runs.length ? `Runs: ${review.runs.map(r => `#${r.run}`).join(", ")}` : "Runs: not detected";
+        el.reviewSummary.textContent = `Hand #${review.data.number || "?"} | Blinds ${review.data.smallBlind}/${review.data.bigBlind} | ${runTxt}`;
+        el.reviewPlayers.textContent = `Players involved (${review.players.length}): ${review.players.map(p => p.name).join(", ")}`;
+        el.reviewPlayersGrid.innerHTML = "";
+        review.players.forEach((p, i) => {
+          const box = document.createElement("div");
+          box.className = "review-player-box";
+          const title = document.createElement("div");
+          title.className = "review-player-name";
+          title.textContent = `P${i + 1} ${p.name} (Seat ${p.seat})`;
+          box.appendChild(title);
+          const cardsWrap = document.createElement("div");
+          cardsWrap.className = "cards";
+          for (const c of p.cards) cardsWrap.appendChild(cardNode(c));
+          box.appendChild(cardsWrap);
+          el.reviewPlayersGrid.appendChild(box);
+        });
 
-        for (const row of review.results) {
-          const div = document.createElement("div");
-          div.className = "review-row";
-          const boardTxt = row.board.length ? row.board.map(cardToPretty).join(" ") : "-";
-          const reasonMap = { "exact": "exact", "target-ci": "target CI", "time-cap": "time cap", "max-trials": "max trials" };
-          div.innerHTML =
-            `<span>${row.street} | Board: ${boardTxt}</span>` +
-            `<span>P1 ${(row.p1Eq * 100).toFixed(2)}% | Tie ${(row.tiePct * 100).toFixed(2)}% | P2 ${(row.p2Eq * 100).toFixed(2)}% | CI +/-${(row.ci95 * 100).toFixed(2)}% (${reasonMap[row.stopReason] || "done"})</span>`;
-          el.reviewStreetResults.appendChild(div);
+        const grouped = new Map();
+        for (const r of review.results) {
+          const key = r.run || 0;
+          if (!grouped.has(key)) grouped.set(key, []);
+          grouped.get(key).push(r);
         }
+        const sortedKeys = [...grouped.keys()].sort((a, b) => a - b);
+        for (const key of sortedKeys) {
+          const header = document.createElement("div");
+          header.className = "review-row";
+          header.innerHTML = `<span><strong>${key === 0 ? "Combined" : `Run #${key}`}</strong></span><span></span>`;
+          el.reviewStreetResults.appendChild(header);
+          const rows = grouped.get(key);
+          for (const row of rows) {
+            const div = document.createElement("div");
+            div.className = "review-row";
+            const boardTxt = row.board.length ? row.board.map(cardToPretty).join(" ") : "-";
+            const eqTxt = review.players.map((p, i) => `P${i + 1} ${(row.equities[i] * 100).toFixed(2)}%`).join(" | ");
+            div.innerHTML =
+              `<span>${row.street} | Board: ${boardTxt}</span>` +
+              `<span>${eqTxt} | Trials ${row.trials.toLocaleString()}</span>`;
+            el.reviewStreetResults.appendChild(div);
+          }
+        }
+        if (review.runs.length > 1) {
+          const riverByRun = review.results.filter(r => r.street === "River" && r.run && r.equities);
+          if (riverByRun.length >= 2) {
+            const avgEq = review.players.map((_, i) => riverByRun.reduce((s, r) => s + r.equities[i], 0) / riverByRun.length);
+            const avgTxt = avgEq.map((v, i) => `P${i + 1} ${(v * 100).toFixed(2)}%`).join(" | ");
+            const avg = document.createElement("div");
+            avg.className = "review-row";
+            avg.innerHTML = `<span><strong>Run Average (River)</strong></span><span>${avgTxt}</span>`;
+            el.reviewStreetResults.appendChild(avg);
+          }
+        }
+
         el.status.textContent = "PokerNow review complete.";
       } catch (err) {
         el.reviewSummary.textContent = `Analysis failed: ${err.message}`;
