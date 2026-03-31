@@ -63,12 +63,6 @@
       letter-spacing: 0.2px;
     }
 
-    .subtitle {
-      color: var(--muted);
-      font-size: 0.92rem;
-      margin-top: 3px;
-    }
-
     .table {
       background:
         radial-gradient(circle at 50% 35%, #1a644f 0%, #0f3b2f 48%, #08241d 100%);
@@ -181,13 +175,20 @@
     }
 
     .equity-text {
-      display: flex;
-      justify-content: space-between;
-      gap: 8px;
+      display: grid;
+      grid-template-columns: minmax(140px, 1fr) auto minmax(140px, 1fr);
+      align-items: center;
+      gap: 6px;
       font-size: 0.84rem;
       color: #deece6;
       padding: 6px 9px;
     }
+    .equity-text span {
+      white-space: nowrap;
+      overflow: visible;
+    }
+    .equity-text span:nth-child(2) { text-align: center; }
+    .equity-text span:nth-child(3) { text-align: right; }
 
     .controls {
       display: flex;
@@ -387,7 +388,6 @@
     <div class="header">
       <div>
         <h1>PLO4 Hand Equity Visualizer</h1>
-        <div class="subtitle">Strict Omaha: exactly 2 hole cards + exactly 3 board cards</div>
         <div class="helper">Tap a slot, then tap a card. Tap a filled slot again to clear it.</div>
       </div>
       <div class="status" id="status">Select cards and click "Run It Out".</div>
