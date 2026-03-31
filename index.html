@@ -399,20 +399,23 @@
       font-size: 0.96rem;
     }
     .drill-position-row {
-      display: inline-flex;
+      display: flex;
       align-items: center;
-      gap: 0;
+      gap: 12px;
       flex-wrap: wrap;
     }
     .drill-table-svg-wrap {
       display: inline-flex;
       align-items: center;
-      vertical-align: middle;
-      margin-left: 10px;
       line-height: 0;
     }
     .drill-table-svg-wrap svg {
-      display: block;
+      display: inline-block;
+      vertical-align: middle;
+      margin-left: 12px;
+      margin-top: 0;
+      position: relative;
+      top: 0;
     }
     .drill-position-badge {
       display: inline-flex;
@@ -1573,20 +1576,30 @@
       nutPts = Math.min(25, nutPts);
 
       let raw = suitedPts + connPts + nutPts;
-      if (dangler) raw -= 15;
+      if (dangler) {
+        const nutOffset = broadwayCount >= 3 ? 8 : broadwayCount === 2 ? 4 : 0;
+        raw -= 15 - nutOffset;
+      }
       score = Math.max(0, Math.min(100, Math.round(raw)));
+
+      const rundownDanglerReason =
+        dangler && danglerInfo
+          ? broadwayCount >= 3
+            ? `✗ Dangler: the ${danglerInfo.danglerRank} doesn't connect with ${danglerInfo.chain} — but high broadway cards partially offset this`
+            : `✗ Dangler: the ${danglerInfo.danglerRank} doesn't connect with ${danglerInfo.chain}`
+          : null;
 
       reasons.push(suitedLabel);
       reasons.push(connLabel);
-      if (dangler && danglerInfo) {
-        reasons.push(`✗ Dangler: the ${danglerInfo.danglerRank} doesn't connect with ${danglerInfo.chain}`);
+      if (rundownDanglerReason) {
+        reasons.push(rundownDanglerReason);
       } else if (!dangler && totalG <= 1) {
         reasons.push("✓ Cohesive structure without a dangler.");
       }
 
       let rundownPrimary;
-      if (dangler && danglerInfo) {
-        rundownPrimary = `✗ Dangler: the ${danglerInfo.danglerRank} doesn't connect with ${danglerInfo.chain}`;
+      if (rundownDanglerReason) {
+        rundownPrimary = rundownDanglerReason;
       } else if (totalG === 0) {
         rundownPrimary = `✓ Perfect rundown: ${drillRundownRankString(cards)}, zero gaps`;
       } else {
@@ -1637,24 +1650,24 @@
     function renderDrillTableSvg(pos) {
       const acc = "#38d39f";
       const seats = [
-        { id: "UTG", cx: 38, cy: 88, lx: 38, ly: 102, anchor: "middle" },
-        { id: "HJ", cx: 18, cy: 48, lx: 12, ly: 51, anchor: "end" },
-        { id: "CO", cx: 52, cy: 18, lx: 52, ly: 10, anchor: "middle" },
-        { id: "BTN", cx: 108, cy: 18, lx: 108, ly: 10, anchor: "middle" },
-        { id: "SB", cx: 142, cy: 48, lx: 155, ly: 51, anchor: "start" },
-        { id: "BB", cx: 122, cy: 88, lx: 122, ly: 102, anchor: "middle" }
+        { id: "UTG", cx: 46, cy: 106, lx: 46, ly: 124, anchor: "middle" },
+        { id: "HJ", cx: 20, cy: 58, lx: 14, ly: 62, anchor: "end" },
+        { id: "CO", cx: 62, cy: 20, lx: 62, ly: 11, anchor: "middle" },
+        { id: "BTN", cx: 138, cy: 20, lx: 138, ly: 11, anchor: "middle" },
+        { id: "SB", cx: 180, cy: 58, lx: 186, ly: 62, anchor: "start" },
+        { id: "BB", cx: 154, cy: 106, lx: 154, ly: 124, anchor: "middle" }
       ];
       let circ = "";
       let lab = "";
       for (const s of seats) {
         const act = s.id === pos && s.id !== "BB";
-        const r = act ? 11 : 8;
+        const r = act ? 13 : 9;
         const fl = act ? acc : "#2a4d42";
         const fi = act ? "filter=\"url(#glow)\"" : "";
         circ += `<circle cx="${s.cx}" cy="${s.cy}" r="${r}" fill="${fl}" ${fi}/>`;
-        lab += `<text x="${s.lx}" y="${s.ly}" text-anchor="${s.anchor}" font-size="9" font-family="inherit" fill="${act ? "#ffffff" : "rgba(255,255,255,0.5)"}">${s.id}</text>`;
+        lab += `<text x="${s.lx}" y="${s.ly}" text-anchor="${s.anchor}" font-size="10" font-family="inherit" fill="${act ? "#ffffff" : "rgba(255,255,255,0.5)"}">${s.id}</text>`;
       }
-      return `<svg width="160" height="110" viewBox="0 0 160 110" xmlns="http://www.w3.org/2000/svg"><defs><filter id="glow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><ellipse cx="80" cy="55" rx="62" ry="38" fill="#1a4a38" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>${circ}${lab}</svg>`;
+      return `<svg width="200" height="130" viewBox="0 0 200 130" xmlns="http://www.w3.org/2000/svg"><defs><filter id="glow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><ellipse cx="100" cy="65" rx="78" ry="48" fill="#1a4a38" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>${circ}${lab}</svg>`;
     }
 
     function updatePreflopDrillPanel() {
