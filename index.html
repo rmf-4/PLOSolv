@@ -30,22 +30,25 @@
         radial-gradient(1100px 640px at 18% 12%, #1b5d49 0%, transparent 46%),
         radial-gradient(1000px 600px at 82% 8%, #164b3b 0%, transparent 44%),
         linear-gradient(180deg, #05110d, var(--bg) 45%, #040906);
-      min-height: 100vh;
-      padding: 20px;
+      height: 100vh;
+      overflow: hidden;
+      padding: 10px;
     }
 
     .app {
-      max-width: 1200px;
+      max-width: 1280px;
       margin: 0 auto;
       display: grid;
-      gap: 16px;
+      gap: 8px;
+      height: calc(100vh - 20px);
+      grid-template-rows: auto auto 1fr;
     }
 
     .header {
       background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
       border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 16px;
-      padding: 16px 18px;
+      border-radius: 14px;
+      padding: 10px 14px;
       box-shadow: var(--shadow);
       display: flex;
       justify-content: space-between;
@@ -56,7 +59,7 @@
 
     h1 {
       margin: 0;
-      font-size: clamp(1.15rem, 2vw, 1.7rem);
+      font-size: clamp(1.05rem, 1.6vw, 1.45rem);
       letter-spacing: 0.2px;
     }
 
@@ -70,47 +73,47 @@
       background:
         radial-gradient(circle at 50% 35%, #1a644f 0%, #0f3b2f 48%, #08241d 100%);
       border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 20px;
-      padding: 14px;
+      border-radius: 16px;
+      padding: 10px;
       box-shadow: var(--shadow);
       display: grid;
-      gap: 14px;
+      gap: 10px;
     }
 
     .seats {
       display: grid;
-      gap: 12px;
+      gap: 8px;
       grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
     }
 
     .seat, .board-panel, .controls, .picker {
       background: linear-gradient(180deg, rgba(0,0,0,0.26), rgba(0,0,0,0.45));
       border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 14px;
-      padding: 12px;
+      border-radius: 12px;
+      padding: 9px;
     }
 
     .seat h2, .board-panel h2, .picker h2 {
-      margin: 0 0 10px;
-      font-size: 1rem;
+      margin: 0 0 6px;
+      font-size: 0.96rem;
     }
 
     .cards {
       display: flex;
-      gap: 8px;
+      gap: 6px;
       flex-wrap: wrap;
     }
 
     .slot {
-      width: 56px;
-      height: 78px;
+      width: 48px;
+      height: 66px;
       border-radius: 9px;
       border: 2px dashed rgba(255,255,255,0.25);
       display: grid;
       place-items: center;
       color: rgba(255,255,255,0.5);
       font-weight: 650;
-      font-size: 0.95rem;
+      font-size: 0.82rem;
       cursor: pointer;
       user-select: none;
       transition: transform 0.12s ease, border-color 0.12s ease;
@@ -120,8 +123,8 @@
     .slot.selected { border-color: #ffd166; box-shadow: 0 0 0 2px rgba(255,209,102,0.35) inset; }
 
     .card {
-      width: 56px;
-      height: 78px;
+      width: 48px;
+      height: 66px;
       border-radius: 9px;
       border: 1px solid var(--card-border);
       background: linear-gradient(180deg, #ffffff, var(--card-bg));
@@ -130,7 +133,7 @@
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      padding: 5px 6px;
+      padding: 4px 5px;
       line-height: 1;
       cursor: pointer;
       user-select: none;
@@ -138,13 +141,13 @@
     }
 
     .card:hover { transform: translateY(-1px); }
-    .card .rank { font-size: 1.05rem; font-weight: 700; }
-    .card .suit { font-size: 1rem; align-self: flex-end; }
+    .card .rank { font-size: 0.92rem; font-weight: 700; }
+    .card .suit { font-size: 0.88rem; align-self: flex-end; }
     .hearts, .diamonds { color: #cf2b2b; }
     .spades, .clubs { color: #111; }
 
     .small-label {
-      margin-top: 8px;
+      margin-top: 5px;
       color: #d8e5df;
       font-size: 0.9rem;
       min-height: 1.3em;
@@ -158,7 +161,7 @@
     }
 
     .equity-bar {
-      height: 20px;
+      height: 16px;
       position: relative;
       display: flex;
     }
@@ -181,15 +184,15 @@
       display: flex;
       justify-content: space-between;
       gap: 8px;
-      font-size: 0.92rem;
+      font-size: 0.84rem;
       color: #deece6;
-      padding: 8px 10px;
+      padding: 6px 9px;
     }
 
     .controls {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
+      gap: 6px;
       align-items: center;
     }
     .controls .spacer {
@@ -200,25 +203,25 @@
       align-items: center;
       gap: 8px;
       color: #d8e8e1;
-      font-size: 0.9rem;
+      font-size: 0.82rem;
     }
     .sim-config input {
-      width: 92px;
+      width: 84px;
       border: 1px solid rgba(255,255,255,0.16);
       border-radius: 8px;
       background: #0f1e18;
       color: #eff7f3;
-      padding: 7px 8px;
+      padding: 5px 7px;
       font-weight: 600;
     }
 
     button, .pill {
       border: none;
-      border-radius: 10px;
-      padding: 10px 13px;
+      border-radius: 9px;
+      padding: 8px 10px;
       font-weight: 620;
       cursor: pointer;
-      font-size: 0.92rem;
+      font-size: 0.84rem;
     }
 
     button.primary {
@@ -238,15 +241,15 @@
     .picker-grid {
       display: grid;
       grid-template-columns: repeat(13, minmax(24px, 1fr));
-      gap: 6px;
+      gap: 4px;
     }
 
     .pick-card {
-      border-radius: 7px;
+      border-radius: 6px;
       border: 1px solid rgba(255,255,255,0.18);
-      padding: 5px 4px;
+      padding: 3px 2px;
       text-align: center;
-      font-size: 0.84rem;
+      font-size: 0.74rem;
       background: linear-gradient(180deg, rgba(255,255,255,0.1), rgba(255,255,255,0.04));
       user-select: none;
       cursor: pointer;
@@ -261,20 +264,20 @@
 
     .status {
       color: #d7e6de;
-      font-size: 0.92rem;
+      font-size: 0.82rem;
       min-height: 1.2rem;
     }
     .helper {
       color: #b9cbc3;
-      font-size: 0.86rem;
-      margin-top: 6px;
+      font-size: 0.78rem;
+      margin-top: 3px;
     }
 
     .target-bar {
       display: flex;
-      gap: 6px;
+      gap: 4px;
       flex-wrap: wrap;
-      margin-bottom: 10px;
+      margin-bottom: 6px;
     }
 
     .pill {
@@ -285,10 +288,97 @@
     .pill.active { background: #3a5d4f; border-color: rgba(255,255,255,0.24); }
 
     @media (max-width: 720px) {
-      body { padding: 12px; }
+      body { height: auto; overflow: auto; padding: 10px; }
+      .app { height: auto; grid-template-rows: none; }
+      .table, .picker { overflow: visible; }
       .slot, .card { width: 50px; height: 70px; }
       .picker-grid { gap: 5px; }
       .pick-card { font-size: 0.78rem; padding: 4px 2px; }
+    }
+
+    .table, .picker {
+      overflow: hidden;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 6px;
+    }
+    .tab-btn {
+      border: 1px solid rgba(255,255,255,0.12);
+      background: #162721;
+      color: #d9ebe3;
+      padding: 7px 11px;
+      border-radius: 9px;
+      font-size: 0.82rem;
+      font-weight: 650;
+      cursor: pointer;
+    }
+    .tab-btn.active {
+      background: #2a4d40;
+      border-color: rgba(255,255,255,0.24);
+    }
+    .hidden { display: none !important; }
+
+    .range-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .range-grid textarea {
+      width: 100%;
+      min-height: 90px;
+      resize: vertical;
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 8px;
+      background: #0d1a15;
+      color: #eaf5ef;
+      padding: 8px;
+      font: 600 0.78rem/1.35 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .range-hint {
+      color: #aec1b8;
+      font-size: 0.75rem;
+      margin-top: 4px;
+    }
+    .explorer-results {
+      margin-top: 6px;
+      color: #dcebe4;
+      font-size: 0.8rem;
+      display: grid;
+      gap: 4px;
+      max-height: 100px;
+      overflow: auto;
+    }
+    .explorer-item {
+      display: flex;
+      justify-content: space-between;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 7px;
+      padding: 4px 6px;
+    }
+    @media (max-width: 900px) {
+      .range-grid { grid-template-columns: 1fr; }
+    }
+
+    .picker {
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      min-height: 0;
+    }
+
+    .picker-grid {
+      align-content: start;
+    }
+
+    @media (max-height: 820px) {
+      .header .helper { display: none; }
+      .status { font-size: 0.76rem; }
+      .slot, .card { width: 44px; height: 60px; }
+      .card .rank { font-size: 0.82rem; }
+      .card .suit { font-size: 0.78rem; }
+      .pick-card { font-size: 0.68rem; padding: 2px 1px; }
     }
   </style>
 </head>
@@ -303,7 +393,12 @@
       <div class="status" id="status">Select cards and click "Run It Out".</div>
     </div>
 
-    <div class="table">
+    <div class="tabs">
+      <button class="tab-btn active" id="tabExact">Exact Hand vs Hand</button>
+      <button class="tab-btn" id="tabRange">Range vs Range</button>
+    </div>
+
+    <div class="table" id="exactTabPanel">
       <div class="equity-wrap">
         <div class="equity-bar">
           <div class="eq-p1" id="eqP1"></div>
@@ -337,6 +432,7 @@
 
       <div class="controls">
         <button class="primary" id="runBtn">Run It Out</button>
+        <button class="secondary" id="exploreRunoutsBtn">Runout Explorer</button>
         <button class="secondary" id="randomFlopBtn">Random Flop</button>
         <button class="secondary" id="dealTurnBtn">Deal Turn</button>
         <button class="secondary" id="dealRiverBtn">Deal River</button>
@@ -346,12 +442,50 @@
           <input id="simCountInput" type="number" min="1000" max="100000" step="1000" value="10000" />
         </label>
       </div>
+
+      <div class="board-panel">
+        <h2>Runout Explorer (Next Street Impact)</h2>
+        <div class="small-label" id="explorerSummary">Needs flop or turn + both 4-card hands.</div>
+        <div class="explorer-results" id="explorerResults"></div>
+      </div>
     </div>
 
-    <div class="picker">
+    <div class="picker" id="exactPicker">
       <h2>Card Picker</h2>
       <div class="target-bar" id="targetBar"></div>
       <div class="picker-grid" id="pickerGrid"></div>
+    </div>
+
+    <div class="table hidden" id="rangeTabPanel">
+      <div class="board-panel">
+        <h2>Range vs Range</h2>
+        <div class="range-grid">
+          <div>
+            <div class="small-label">Player 1 Range</div>
+            <textarea id="rangeP1Input" placeholder="AsKsQhJh, AdKdQcJc:0.5"></textarea>
+          </div>
+          <div>
+            <div class="small-label">Player 2 Range</div>
+            <textarea id="rangeP2Input" placeholder="9s8s7d6d  AhKhQdJd:0.25"></textarea>
+          </div>
+        </div>
+        <div class="range-hint">Format: exactly 4 cards per combo, optional weight with <code>:0.5</code>. Example <code>AsKdQcJh:1.2</code>.</div>
+      </div>
+      <div class="controls">
+        <button class="primary" id="runRangeBtn">Run Range Sim</button>
+        <button class="secondary" id="clearRangeBtn">Clear Ranges</button>
+        <label class="sim-config">Board (0-5 cards)
+          <input id="rangeBoardInput" type="text" placeholder="AhKd7c" />
+        </label>
+        <span class="spacer"></span>
+        <label class="sim-config">Simulations
+          <input id="rangeSimCountInput" type="number" min="1000" max="100000" step="1000" value="15000" />
+        </label>
+      </div>
+      <div class="board-panel">
+        <h2>Range Result</h2>
+        <div class="small-label" id="rangeResultLabel">Enter ranges, then run.</div>
+      </div>
     </div>
   </div>
 
@@ -372,7 +506,8 @@
       p2: [null, null, null, null],
       board: [null, null, null, null, null],
       activeTarget: "p1-0",
-      liveTimer: null
+      liveTimer: null,
+      tab: "exact"
     };
 
     const el = {
@@ -382,7 +517,13 @@
       pickerGrid: document.getElementById("pickerGrid"),
       targetBar: document.getElementById("targetBar"),
       status: document.getElementById("status"),
+      tabExact: document.getElementById("tabExact"),
+      tabRange: document.getElementById("tabRange"),
+      exactTabPanel: document.getElementById("exactTabPanel"),
+      exactPicker: document.getElementById("exactPicker"),
+      rangeTabPanel: document.getElementById("rangeTabPanel"),
       runBtn: document.getElementById("runBtn"),
+      exploreRunoutsBtn: document.getElementById("exploreRunoutsBtn"),
       randomFlopBtn: document.getElementById("randomFlopBtn"),
       dealTurnBtn: document.getElementById("dealTurnBtn"),
       dealRiverBtn: document.getElementById("dealRiverBtn"),
@@ -394,7 +535,16 @@
       eqP2: document.getElementById("eqP2"),
       p1EquityLabel: document.getElementById("p1EquityLabel"),
       p2EquityLabel: document.getElementById("p2EquityLabel"),
-      tieLabel: document.getElementById("tieLabel")
+      tieLabel: document.getElementById("tieLabel"),
+      explorerSummary: document.getElementById("explorerSummary"),
+      explorerResults: document.getElementById("explorerResults"),
+      rangeP1Input: document.getElementById("rangeP1Input"),
+      rangeP2Input: document.getElementById("rangeP2Input"),
+      rangeBoardInput: document.getElementById("rangeBoardInput"),
+      rangeSimCountInput: document.getElementById("rangeSimCountInput"),
+      runRangeBtn: document.getElementById("runRangeBtn"),
+      clearRangeBtn: document.getElementById("clearRangeBtn"),
+      rangeResultLabel: document.getElementById("rangeResultLabel")
     };
 
     function fullDeck() {
@@ -670,10 +820,7 @@
       return b;
     }
 
-    function runMonteCarlo(trials) {
-      const p1 = state.p1.slice();
-      const p2 = state.p2.slice();
-      const knownBoard = state.board.slice();
+    function runMonteCarloForHands(p1, p2, knownBoard, trials) {
       if (p1.some(c => !c) || p2.some(c => !c)) {
         return { error: "Both players need exactly 4 cards." };
       }
@@ -698,6 +845,10 @@
         trials, p1w, p2w, ties,
         p1Eq, p2Eq, tiePct: ties / trials
       };
+    }
+
+    function runMonteCarlo(trials) {
+      return runMonteCarloForHands(state.p1.slice(), state.p2.slice(), state.board.slice(), trials);
     }
 
     function setEquityUI(p1Eq, p2Eq, tiePct) {
@@ -763,11 +914,13 @@
     }
 
     function render() {
+      renderTabs();
       renderCards();
       renderPicker();
       renderTargets();
       updateHandLabels();
       refreshActionState();
+      syncUrlStateSoon();
     }
 
     function clearAllCards() {
@@ -776,6 +929,8 @@
       state.board = [null, null, null, null, null];
       state.activeTarget = "p1-0";
       setEquityUI(0.5, 0.5, 0);
+      el.explorerSummary.textContent = "Needs flop or turn + both 4-card hands.";
+      el.explorerResults.innerHTML = "";
       render();
       el.status.textContent = "All cards cleared.";
     }
@@ -799,6 +954,7 @@
     }
 
     function refreshActionState() {
+      if (state.tab !== "exact") return;
       const bothReady = state.p1.every(Boolean) && state.p2.every(Boolean);
       el.runBtn.disabled = !bothReady;
       el.dealTurnBtn.disabled = !state.board[0] || !state.board[1] || !state.board[2] || Boolean(state.board[3]);
@@ -808,6 +964,181 @@
         const p2Missing = state.p2.filter(c => !c).length;
         el.status.textContent = `Set hole cards to run: P1 missing ${p1Missing}, P2 missing ${p2Missing}.`;
       }
+    }
+
+    function getRangeSimCount() {
+      const raw = Number(el.rangeSimCountInput.value || 15000);
+      const clamped = Math.min(100000, Math.max(1000, raw));
+      const rounded = Math.round(clamped / 1000) * 1000;
+      el.rangeSimCountInput.value = String(rounded);
+      return rounded;
+    }
+
+    function parseCardToken(token) {
+      if (!/^[AKQJT2-9][shdc]$/i.test(token)) return null;
+      return token[0].toUpperCase() + token[1].toLowerCase();
+    }
+
+    function parseBoardInput(text) {
+      const tokens = (text || "").match(/[AKQJT2-9][shdc]/ig) || [];
+      const cards = tokens.map(parseCardToken).filter(Boolean);
+      if (cards.length > 5) return { error: "Board supports at most 5 cards." };
+      if (new Set(cards).size !== cards.length) return { error: "Board has duplicate cards." };
+      const board = [null, null, null, null, null];
+      for (let i = 0; i < cards.length; i++) board[i] = cards[i];
+      return { board };
+    }
+
+    function parseRangeText(text) {
+      const items = (text || "").split(/[\s,]+/).map(x => x.trim()).filter(Boolean);
+      const combos = [];
+      for (const item of items) {
+        const m = item.match(/^(([AKQJT2-9][shdc]){4})(?::([0-9]*\.?[0-9]+))?$/i);
+        if (!m) return { error: `Invalid combo format: ${item}` };
+        const cards = [];
+        const raw = m[1];
+        for (let i = 0; i < raw.length; i += 2) {
+          cards.push(parseCardToken(raw.slice(i, i + 2)));
+        }
+        if (new Set(cards).size !== cards.length) return { error: `Duplicate card inside combo: ${item}` };
+        const weight = m[3] ? Number(m[3]) : 1;
+        if (!(weight > 0)) return { error: `Invalid weight in combo: ${item}` };
+        combos.push({ cards, weight });
+      }
+      if (!combos.length) return { error: "Range is empty." };
+      return { combos };
+    }
+
+    function pickWeightedCombo(combos) {
+      const total = combos.reduce((s, c) => s + c.weight, 0);
+      let r = Math.random() * total;
+      for (const c of combos) {
+        r -= c.weight;
+        if (r <= 0) return c;
+      }
+      return combos[combos.length - 1];
+    }
+
+    function simulateRangeVsRange(trials) {
+      const p1Parsed = parseRangeText(el.rangeP1Input.value);
+      if (p1Parsed.error) return { error: `P1: ${p1Parsed.error}` };
+      const p2Parsed = parseRangeText(el.rangeP2Input.value);
+      if (p2Parsed.error) return { error: `P2: ${p2Parsed.error}` };
+      const boardParsed = parseBoardInput(el.rangeBoardInput.value);
+      if (boardParsed.error) return { error: boardParsed.error };
+      const boardKnown = boardParsed.board;
+
+      let p1w = 0, p2w = 0, ties = 0, valid = 0;
+      for (let t = 0; t < trials; t++) {
+        let p1Hand = null, p2Hand = null;
+        for (let tries = 0; tries < 120; tries++) {
+          const c1 = pickWeightedCombo(p1Parsed.combos).cards;
+          const c2 = pickWeightedCombo(p2Parsed.combos).cards;
+          const all = [...c1, ...c2, ...boardKnown.filter(Boolean)];
+          if (new Set(all).size === all.length) {
+            p1Hand = c1;
+            p2Hand = c2;
+            break;
+          }
+        }
+        if (!p1Hand || !p2Hand) continue;
+        valid++;
+        const result = runMonteCarloForHands(p1Hand, p2Hand, boardKnown, 1);
+        if (result.p1w) p1w++;
+        else if (result.p2w) p2w++;
+        else ties++;
+      }
+      if (!valid) return { error: "No valid non-overlapping combo pairs found." };
+      const p1Eq = (p1w + ties * 0.5) / valid;
+      const p2Eq = (p2w + ties * 0.5) / valid;
+      return { valid, p1w, p2w, ties, p1Eq, p2Eq, tiePct: ties / valid };
+    }
+
+    function cardToPretty(card) {
+      const suit = cardSuitMeta(card);
+      return `${card[0]}${suit.symbol}`;
+    }
+
+    function runoutExplorer() {
+      el.explorerResults.innerHTML = "";
+      const boardKnown = state.board.filter(Boolean);
+      if (!state.p1.every(Boolean) || !state.p2.every(Boolean) || boardKnown.length < 3 || boardKnown.length > 4) {
+        el.explorerSummary.textContent = "Needs flop or turn + both 4-card hands.";
+        return;
+      }
+      const used = new Set([...state.p1, ...state.p2, ...boardKnown]);
+      const candidates = fullDeck().filter(c => !used.has(c));
+      const isTurnSpot = boardKnown.length === 3;
+      const rows = [];
+      for (const card of candidates) {
+        const board = state.board.slice();
+        if (isTurnSpot) board[3] = card;
+        else board[4] = card;
+        const simTrials = isTurnSpot ? 1200 : 1;
+        const result = runMonteCarloForHands(state.p1, state.p2, board, simTrials);
+        if (!result.error) rows.push({ card, p1Eq: result.p1Eq });
+      }
+      rows.sort((a, b) => b.p1Eq - a.p1Eq);
+      const top = rows.slice(0, 5);
+      const bottom = rows.slice(-5).reverse();
+      el.explorerSummary.textContent = `${isTurnSpot ? "Turn" : "River"} impact for P1 equity (best/worst next cards).`;
+      for (const item of [...top, ...bottom]) {
+        const row = document.createElement("div");
+        row.className = "explorer-item";
+        row.innerHTML = `<span>${cardToPretty(item.card)}</span><span>P1 ${ (item.p1Eq * 100).toFixed(2)}%</span>`;
+        el.explorerResults.appendChild(row);
+      }
+    }
+
+    let urlSyncTimer = null;
+    function syncUrlStateSoon() {
+      if (urlSyncTimer) clearTimeout(urlSyncTimer);
+      urlSyncTimer = setTimeout(syncUrlState, 120);
+    }
+
+    function syncUrlState() {
+      const data = {
+        tab: state.tab,
+        p1: state.p1,
+        p2: state.p2,
+        board: state.board,
+        sim: getSimCount(),
+        rsim: getRangeSimCount(),
+        rp1: el.rangeP1Input.value || "",
+        rp2: el.rangeP2Input.value || "",
+        rboard: el.rangeBoardInput.value || ""
+      };
+      const encoded = btoa(encodeURIComponent(JSON.stringify(data)));
+      history.replaceState(null, "", `#state=${encoded}`);
+    }
+
+    function loadStateFromUrl() {
+      const m = location.hash.match(/state=([^&]+)/);
+      if (!m) return;
+      try {
+        const data = JSON.parse(decodeURIComponent(atob(m[1])));
+        if (data.tab === "range" || data.tab === "exact") state.tab = data.tab;
+        if (Array.isArray(data.p1) && data.p1.length === 4) state.p1 = data.p1;
+        if (Array.isArray(data.p2) && data.p2.length === 4) state.p2 = data.p2;
+        if (Array.isArray(data.board) && data.board.length === 5) state.board = data.board;
+        if (data.sim) el.simCountInput.value = String(data.sim);
+        if (data.rsim) el.rangeSimCountInput.value = String(data.rsim);
+        if (typeof data.rp1 === "string") el.rangeP1Input.value = data.rp1;
+        if (typeof data.rp2 === "string") el.rangeP2Input.value = data.rp2;
+        if (typeof data.rboard === "string") el.rangeBoardInput.value = data.rboard;
+      } catch (_e) {
+        // Ignore malformed shared state URLs.
+      }
+    }
+
+    function renderTabs() {
+      const isExact = state.tab === "exact";
+      el.tabExact.classList.toggle("active", isExact);
+      el.tabRange.classList.toggle("active", !isExact);
+      el.exactTabPanel.classList.toggle("hidden", !isExact);
+      el.exactPicker.classList.toggle("hidden", !isExact);
+      el.rangeTabPanel.classList.toggle("hidden", isExact);
+      if (!isExact) el.status.textContent = "Range mode: enter ranges and run simulation.";
     }
 
     el.runBtn.addEventListener("click", async () => {
@@ -867,6 +1198,53 @@
       scheduleLiveUpdate();
     });
 
+    el.exploreRunoutsBtn.addEventListener("click", () => {
+      runoutExplorer();
+      syncUrlStateSoon();
+    });
+
+    el.tabExact.addEventListener("click", () => {
+      state.tab = "exact";
+      render();
+    });
+
+    el.tabRange.addEventListener("click", () => {
+      state.tab = "range";
+      render();
+    });
+
+    el.runRangeBtn.addEventListener("click", () => {
+      const trials = getRangeSimCount();
+      el.status.textContent = `Running range sim (${trials.toLocaleString()} trials)...`;
+      const result = simulateRangeVsRange(trials);
+      if (result.error) {
+        el.rangeResultLabel.textContent = result.error;
+        el.status.textContent = result.error;
+        return;
+      }
+      el.rangeResultLabel.textContent =
+        `P1 ${(result.p1Eq * 100).toFixed(2)}% | P2 ${(result.p2Eq * 100).toFixed(2)}% | Tie ${(result.tiePct * 100).toFixed(2)}% from ${result.valid.toLocaleString()} valid draws`;
+      el.status.textContent = "Range simulation complete.";
+      syncUrlStateSoon();
+    });
+
+    el.clearRangeBtn.addEventListener("click", () => {
+      el.rangeP1Input.value = "";
+      el.rangeP2Input.value = "";
+      el.rangeBoardInput.value = "";
+      el.rangeResultLabel.textContent = "Enter ranges, then run.";
+      syncUrlStateSoon();
+    });
+
+    el.rangeP1Input.addEventListener("input", syncUrlStateSoon);
+    el.rangeP2Input.addEventListener("input", syncUrlStateSoon);
+    el.rangeBoardInput.addEventListener("input", syncUrlStateSoon);
+    el.rangeSimCountInput.addEventListener("change", () => {
+      getRangeSimCount();
+      syncUrlStateSoon();
+    });
+
+    loadStateFromUrl();
     render();
   </script>
 </body>
