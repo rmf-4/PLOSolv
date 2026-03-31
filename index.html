@@ -1988,7 +1988,10 @@
       const heroName = review.players[heroIdx]?.name || `P${heroIdx + 1}`;
       const heroPre = pre.equities[heroIdx] || 0;
       const heroAllInStreet = detectHeroAllInStreet(review, heroIdx);
+      const preflopAllIn = heroAllInStreet === "Preflop";
       const flopAllIn = heroAllInStreet === "Flop";
+      const turnAllIn = heroAllInStreet === "Turn";
+      const riverAllIn = heroAllInStreet === "River";
       notes.push(`You are ${heroName} (P${heroIdx + 1}).`);
       function swing(from, to, streetName) {
         if (!from || !to) return;
@@ -2006,65 +2009,118 @@
           notes.push(`${streetName} inflection: P${bestI + 1} ${dir} ${Math.abs(bestDelta * 100).toFixed(1)} equity points.`);
         }
       }
-      swing(pre, flopCombined || flop, "Flop");
-      if (!flopAllIn) {
+      if (!heroAllInStreet) {
+        notes.push("Hand shape: chips behind through the runout — street profile + river matter for decisions.");
+        swing(pre, flopCombined || flop, "Flop");
         swing(flop || pre, turn, "Turn");
         swing(turn || flop || pre, river, "River");
-      } else if (turn || river) {
-        notes.push("Turn/river swings are runout-only — no decisions remain after a flop stack-off.");
+      } else if (preflopAllIn) {
+        notes.push("Hand shape: preflop stack-off — flop through river are runout-only for you.");
+        swing(pre, flopCombined || flop, "Flop");
+        notes.push("(Flop/turn/river equity swings are for context only after commitment.)");
+      } else if (flopAllIn) {
+        notes.push("Hand shape: flop stack-off — turn and river are runout-only for you.");
+        swing(pre, flopCombined || flop, "Flop");
+      } else if (turnAllIn) {
+        notes.push("Hand shape: turn stack-off — river is runout-only for you.");
+        swing(pre, flopCombined || flop, "Flop");
+        swing(flop || pre, turn, "Turn");
+      } else if (riverAllIn) {
+        notes.push("Hand shape: river stack-off — all prior streets were decisions.");
+        swing(pre, flopCombined || flop, "Flop");
+        swing(flop || pre, turn, "Turn");
+        swing(turn || flop || pre, river, "River");
       }
+
       const heroFlop = (flopCombined || flop) ? (flopCombined || flop).equities[heroIdx] : heroPre;
       const heroTurn = turn ? turn.equities[heroIdx] : heroFlop;
       const heroRiver = river ? river.equities[heroIdx] : heroTurn;
       const heroNet = heroRiver - heroPre;
-      const headline = [];
-      const lockedEarly = heroAllInStreet === "Preflop" || heroAllInStreet === "Flop";
-      let verdict =
-        heroAllInStreet && heroNet < -0.1 ? "VERDICT: Mostly variance (you were all-in before runout)." :
-        (!heroAllInStreet && heroNet < -0.1 ? "VERDICT: Likely leak in continue strategy." :
-        (heroNet > 0.1 ? "VERDICT: Good line and strong realization." : "VERDICT: Close to neutral / mixed."));
-      if (flopAllIn && heroFlop >= 0.65 && heroRiver <= 0.08) {
-        verdict = "VERDICT: Cooler-style runout — you stacked a large flop favorite; losing is mostly variance.";
-      } else if (flopAllIn && heroFlop >= 0.55) {
-        verdict = "VERDICT: Judge this hand by flop stack-off equity, not by preflop or by the final river.";
-      }
-      if (flopAllIn) {
-        headline.push(`Primary spot: flop all-in — ~${(heroFlop * 100).toFixed(1)}% at stack-off (preflop ${(heroPre * 100).toFixed(1)}% is background only).`);
-      }
-      headline.push(verdict);
-      headline.push(`Actionable summary: Pre ${(heroPre * 100).toFixed(1)} -> Flop ${(heroFlop * 100).toFixed(1)} -> Turn ${(heroTurn * 100).toFixed(1)} -> River ${(heroRiver * 100).toFixed(1)}.`);
-      if (lockedEarly) {
-        headline.push(`Decision lock: you were all-in on ${heroAllInStreet}; turn/river are runout variance, not decision quality.`);
-      }
+
+      let commitEq = heroPre;
+      if (preflopAllIn) commitEq = heroPre;
+      else if (flopAllIn) commitEq = heroFlop;
+      else if (turnAllIn) commitEq = heroTurn;
+      else if (riverAllIn) commitEq = heroRiver;
+
+      let heroWonShowdown = false;
       if (river) {
         const maxEq = Math.max(...river.equities);
         const winners = river.equities.map((v, i) => ({ v, i })).filter(x => Math.abs(x.v - maxEq) < 1e-9);
-        const heroWon = winners.some(w => w.i === heroIdx);
+        heroWonShowdown = winners.some(w => w.i === heroIdx);
         if (winners.length > 1) notes.push(`River finishes as chopped equity between ${winners.map(w => `P${w.i + 1}`).join(", ")}.`);
         else notes.push(`River winner by equity: P${winners[0].i + 1} (${(maxEq * 100).toFixed(1)}%).`);
-        if (!heroWon && heroRiver < 0.2 && !heroAllInStreet) {
+      }
+
+      const headline = [];
+      let verdict;
+      if (!heroAllInStreet) {
+        verdict =
+          heroNet < -0.1 ? "VERDICT: Likely leak in continue strategy." :
+          (heroNet > 0.1 ? "VERDICT: Good line and strong realization." : "VERDICT: Close to neutral / mixed.");
+      } else if (preflopAllIn || flopAllIn || turnAllIn) {
+        const ship = heroAllInStreet === "Preflop" ? "preflop" : heroAllInStreet === "Flop" ? "flop" : "turn";
+        headline.push(`Commitment snapshot (${ship} all-in): ~${(commitEq * 100).toFixed(1)}% at stack-off vs these cards.`);
+        if (river && commitEq < 0.28 && heroWonShowdown && heroRiver >= 0.90) {
+          verdict = `VERDICT: You were crushed at ${ship} stack-off but won at showdown — classic suck-out; do not treat the pot as proof of a good commit.`;
+        } else if (river && commitEq < 0.28 && !heroWonShowdown) {
+          verdict = `VERDICT: You were a big underdog when stacks went in on the ${ship}; losing matches expectations.`;
+        } else if (river && commitEq < 0.40 && heroWonShowdown && heroRiver >= 0.80) {
+          verdict = `VERDICT: Behind at stack-off (${ship}) but shipped — results biased you; audit similar stack-offs.`;
+        } else if (river && commitEq < 0.40 && !heroWonShowdown) {
+          verdict = `VERDICT: Thin stack-off on the ${ship}; expect this class of spot to burn EV over time.`;
+        } else if (river && commitEq >= 0.60 && !heroWonShowdown && heroRiver <= 0.15) {
+          verdict = `VERDICT: You committed with plenty of equity on the ${ship}; losing here is mostly a bad runout.`;
+        } else if (river && commitEq >= 0.60 && heroWonShowdown) {
+          verdict = `VERDICT: Commitment looked strong on the ${ship}; winning mostly aligns with you having the best of it.`;
+        } else {
+          verdict = `VERDICT: Mixed ${ship} stack-off — pair this line with pot odds, dead money, and villain tendencies before auto-repeating.`;
+        }
+      } else {
+        verdict =
+          heroNet < -0.1 ? "VERDICT: Mostly variance or thin river spot (you were already all-in)." :
+          (heroNet > 0.1 ? "VERDICT: Strong realization after prior decisions." : "VERDICT: Close to neutral / mixed.");
+      }
+
+      headline.push(verdict);
+      headline.push(`Actionable summary: Pre ${(heroPre * 100).toFixed(1)} -> Flop ${(heroFlop * 100).toFixed(1)} -> Turn ${(heroTurn * 100).toFixed(1)} -> River ${(heroRiver * 100).toFixed(1)}.`);
+      if (heroAllInStreet) {
+        headline.push(`Note: after ${heroAllInStreet} all-in, later-street % is for story only unless you still had chips to play.`);
+      }
+
+      if (river) {
+        if (!heroWonShowdown && heroRiver < 0.2 && !heroAllInStreet) {
           headline.push("Actionable: fold/call less vs this line; continue with stronger nut potential + redraws.");
-        } else if (heroWon && heroRiver > 0.5) {
+        } else if (heroWonShowdown && heroRiver > 0.5 && !heroAllInStreet) {
           headline.push("Actionable: keep this aggression pattern; it matches a high-EV value-realization line.");
+        } else if (heroAllInStreet && (preflopAllIn || flopAllIn || turnAllIn) && commitEq < 0.35 && heroWonShowdown) {
+          headline.push(`Actionable: mark as bail-out — drill ~${(commitEq * 100).toFixed(0)}% stack-offs so you are not counting on rivers long-term.`);
+        } else if (heroAllInStreet && (preflopAllIn || flopAllIn || turnAllIn) && commitEq < 0.35 && !heroWonShowdown) {
+          headline.push("Actionable: tighten commitment threshold or insist on better price before stacking as a clear underdog.");
+        } else if (heroAllInStreet && (preflopAllIn || flopAllIn || turnAllIn) && commitEq >= 0.55 && !heroWonShowdown && heroRiver < 0.2) {
+          headline.push("Actionable: no shame in the loss — focus on whether stack-off range was defensible, not the ugly river.");
         }
       }
+
       const band = (x) => x >= 0.58 ? "pressure/value-heavy" : (x >= 0.42 ? "mixed realization" : "defensive / fold-heavy");
       headline.push(`Flop band: ${band(heroFlop)} | Turn band: ${band(heroTurn)}.`);
-      if (lockedEarly) {
+
+      if (heroAllInStreet && (preflopAllIn || flopAllIn)) {
         if (heroFlop < 0.4) {
-          headline.push("Actionable: when stacking off this early, require stronger nut equity or more redraw coverage.");
+          headline.push("Actionable: need nuttier primary equity or massive pot odds before repeating these early stack-offs.");
         } else if (heroFlop >= 0.55) {
-          headline.push("Actionable: this is a standard stack-off threshold; prioritize similar high-equity + redraw structures.");
+          headline.push("Actionable: prioritize hands that can stack off with high equity + redraws on similar textures.");
         } else {
-          headline.push("Actionable: marginal stack-off region; tighten slightly unless pot odds or dead money improve threshold.");
+          headline.push("Actionable: marginal — only repeat with dead money, blockers, or reads that justify thin equity.");
         }
       }
+
       const turnDrop = heroTurn - heroFlop;
       if (turnDrop <= -0.12 && !heroAllInStreet) {
         headline.push("Leak check: large flop->turn equity drop; likely over-calling turn with non-nut structures.");
       }
       const preGap = heroPre - pre.equities[leaderIdx];
-      if (!flopAllIn) {
+      if (!heroAllInStreet) {
         if (preGap <= -0.12) {
           headline.push("Range note: preflop equity deficit vs leader; tighten preflop continues and bias to nuttier structures.");
         } else if (preGap >= 0.08) {
@@ -2072,8 +2128,8 @@
         }
       }
       notes.push(...headline);
-      if (flopAllIn) {
-        notes.push(`Reference: stack-off equity on this flop is what matters; preflop favorite was P${leaderIdx + 1} at ${(pre.equities[leaderIdx] * 100).toFixed(1)}% (context only).`);
+      if (heroAllInStreet && (preflopAllIn || flopAllIn || turnAllIn)) {
+        notes.push(`Reference: primary metric is equity at ${heroAllInStreet.toLowerCase()} stack-off; preflop favorite was P${leaderIdx + 1} at ${(pre.equities[leaderIdx] * 100).toFixed(1)}% (secondary).`);
       } else {
         notes.push(`Reference: table preflop favorite P${leaderIdx + 1} at ${(pre.equities[leaderIdx] * 100).toFixed(1)}%.`);
       }
