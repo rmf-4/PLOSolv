@@ -1089,65 +1089,419 @@
       return vals.map(drillValueToRank).join("-");
     }
 
-    /**
-     * Feature-based PLO4 preflop drill scoring (not a lookup table).
-     * @returns {{ score: number, action: 'open'|'fold', reasons: string[], drillExplain: string[] }}
-     */
-    function scorePLOHand(cards, position) {
-      const reasons = [];
+    function drillSuitHistogram(cards) {
       const suitHist = {};
       for (const c of cards) {
         const s = c[1];
         suitHist[s] = (suitHist[s] || 0) + 1;
       }
-      const suitCounts = Object.values(suitHist).sort((a, b) => b - a);
-      const maxSuit = suitCounts[0] || 0;
-      const numSuits = suitCounts.length;
-      const isRainbow = numSuits === 4;
-      const isDoubleSuited = maxSuit < 3 && numSuits === 2 && suitCounts[0] === 2 && suitCounts[1] === 2;
-      const isSingleSuited = maxSuit < 3 && maxSuit === 2 && numSuits === 3;
-      const isTripleOrQuad = maxSuit >= 3;
+      return suitHist;
+    }
 
-      let suitedPts = 0;
-      let suitedLabel = "";
-      if (isTripleOrQuad) {
-        suitedPts = 6;
-        const heavyEntry = Object.entries(suitHist).find(([, n]) => n >= 3);
-        const sId = heavyEntry ? heavyEntry[0] : "?";
-        suitedLabel = `Flush blocker: three or four ${drillSuitLongName(sId)} — awkward structure (6 pts).`;
-      } else if (isDoubleSuited) {
-        suitedPts = 25;
+    function drillSuitednessShape(suitHist) {
+      const suitCounts = Object.values(suitHist).sort((a, b) => b - a);
+      const maxS = suitCounts[0] || 0;
+      const numSuits = suitCounts.length;
+      return {
+        suitCounts,
+        maxSuit: maxS,
+        numSuits,
+        isRainbow: numSuits === 4,
+        isDoubleSuited: maxS < 3 && numSuits === 2 && suitCounts[0] === 2 && suitCounts[1] === 2,
+        isSingleSuited: maxS < 3 && maxS === 2 && numSuits === 3,
+        isTripleOrQuad: maxS >= 3
+      };
+    }
+
+    function drillSuitednessLabel(suitHist, sm) {
+      if (sm.isTripleOrQuad) {
+        const heavy = Object.entries(suitHist).find(([, n]) => n >= 3);
+        const sId = heavy ? heavy[0] : "?";
+        return `✗ Flush blocker: three or four ${drillSuitLongName(sId)}`;
+      }
+      if (sm.isDoubleSuited) {
         const pairSuits = Object.entries(suitHist)
           .filter(([, n]) => n === 2)
           .map(([s]) => drillSuitLongName(s));
-        suitedLabel = `✓ Double suited (${pairSuits.join(" + ")})`;
-      } else if (isSingleSuited) {
-        suitedPts = 13;
-        const pairS = Object.entries(suitHist).find(([, n]) => n === 2);
-        suitedLabel = `✓ Single suited (${pairS ? drillSuitLongName(pairS[0]) : "one suit"})`;
-      } else if (isRainbow) {
-        suitedPts = 0;
-        suitedLabel = "Rainbow — no suited upside.";
-      } else {
-        suitedPts = 0;
-        suitedLabel = "Suitedness is weak or fragmented.";
+        return `✓ Double suited (${pairSuits.join(" + ")})`;
       }
+      if (sm.isSingleSuited) {
+        const pairS = Object.entries(suitHist).find(([, n]) => n === 2);
+        return `✓ Single suited (${pairS ? drillSuitLongName(pairS[0]) : "one suit"})`;
+      }
+      if (sm.isRainbow) return "Rainbow — no suited upside.";
+      return "Suitedness: fragmented / weak.";
+    }
 
+    function drillTwoCardWithin3(cards) {
+      if (cards.length !== 2) return false;
+      const v = cards.map(c => RANK_TO_VALUE[c[0]]).sort((a, b) => b - a);
+      return v[0] - v[1] <= 3;
+    }
+
+    const DRILL_PAIR_BASE = { J: 30, T: 27, 9: 24, 8: 21, 7: 18, 6: 15, 5: 12, 4: 10, 3: 8, 2: 6 };
+
+    function drillPairPrettyName(rankChar) {
+      const m = {
+        J: "Jacks",
+        T: "Tens",
+        9: "Nines",
+        8: "Eights",
+        7: "Sevens",
+        6: "Sixes",
+        5: "Fives",
+        4: "Fours",
+        3: "Threes",
+        2: "Deuces"
+      };
+      return m[rankChar] || `Pocket ${rankChar}`;
+    }
+
+    /**
+     * Archetype-based PLO4 preflop drill scoring (not a lookup table).
+     * @returns {{ score: number, action: 'open'|'fold', reasons: string[], drillExplain: string[] }}
+     */
+    function scorePLOHand(cards, position) {
+      const reasons = [];
+      const rankCounts = {};
+      for (const c of cards) {
+        const r = c[0];
+        rankCounts[r] = (rankCounts[r] || 0) + 1;
+      }
+      const suitHist = drillSuitHistogram(cards);
+      const sm = drillSuitednessShape(suitHist);
+      const suitedLabel = drillSuitednessLabel(suitHist, sm);
       const sortedVals = drillRankValues(cards);
       const totalG = drillTotalGaps(sortedVals);
       const dangler = drillHasDangler(sortedVals);
       const danglerInfo = drillDanglerInfo(cards);
+      const aceCount = rankCounts.A || 0;
+      const kingCount = rankCounts.K || 0;
+      const queenCount = rankCounts.Q || 0;
+      const broadwayCount = cards.filter(c => RANK_TO_VALUE[c[0]] >= 10).length;
 
-      let connPts = 6;
+      let archetype = "RUNDOWN";
+      if (aceCount >= 2) archetype = "AA";
+      else if (kingCount >= 2) archetype = "KK";
+      else if (queenCount >= 2) archetype = "QQ";
+      else {
+        const pairRanks = Object.entries(rankCounts)
+          .filter(([, n]) => n === 2)
+          .map(([r]) => r);
+        if (pairRanks.length >= 1) {
+          archetype = "PAIR";
+        }
+      }
+
+      let score = 0;
+      let suitedPts = 0;
+      let connPts = 0;
+      let nutPts = 0;
+      let connLabel = "";
+
+      const th = PREFLOP_OPEN_THRESHOLDS[position] ?? 55;
+      let action;
+      let actionWord;
+      const posBullet = () => {
+        action = score >= th ? "open" : "fold";
+        actionWord = action === "open" ? "open" : "fold";
+        return `📍 ${position} threshold: ${th} — your hand scored ${score} (${actionWord})`;
+      };
+
+      const buildDrillExplain3 = (lines) => {
+        const seen = new Set();
+        const u = lines.filter((x) => {
+          if (!x || seen.has(x)) return false;
+          seen.add(x);
+          return true;
+        });
+        const p = posBullet();
+        return [...u.slice(0, 2), p].slice(0, 3);
+      };
+
+      if (archetype === "AA") {
+        score = 80;
+        if (sm.isTripleOrQuad) {
+          suitedPts = -10;
+          score += suitedPts;
+        } else if (sm.isDoubleSuited) {
+          suitedPts = 15;
+          score += 15;
+        } else if (sm.isSingleSuited) {
+          suitedPts = 7;
+          score += 7;
+        } else {
+          suitedPts = 0;
+        }
+
+        const side = cards.filter(c => c[0] !== "A");
+        let sideNote = [];
+        if (side.some(c => c[0] === "K")) {
+          score += 4;
+          sideNote.push("King");
+        }
+        if (side.some(c => c[0] === "Q")) {
+          score += 3;
+          sideNote.push("Queen");
+        }
+        const sv = side.map(c => RANK_TO_VALUE[c[0]]).sort((a, b) => b - a);
+        if (sv.length === 2 && sv[0] >= 10 && sv[1] >= 10) {
+          score += 3;
+          sideNote.push("two broadway kickers");
+        }
+        if (side.length === 2 && drillTwoCardWithin3(side)) {
+          score += 3;
+          sideNote.push("connected kickers");
+        }
+
+        score = Math.max(0, Math.min(100, Math.round(score)));
+        connPts = 0;
+        nutPts = score - suitedPts;
+
+        reasons.push("Archetype: pocket aces.");
+        reasons.push(suitedLabel);
+        if (sideNote.length) reasons.push(`Side cards: ${sideNote.join(", ")}.`);
+
+        const sideSummary =
+          sideNote.length ? ` Side boost: ${sideNote.join(", ")}.` : "";
+        const drillExplain = buildDrillExplain3([
+          "✓ Pocket Aces — always an open from any position",
+          suitedLabel + sideSummary
+        ]);
+
+        action = score >= th ? "open" : "fold";
+        actionWord = action === "open" ? "open" : "fold";
+        return {
+          score,
+          action,
+          reasons: [...reasons, `📍 ${position} threshold: ${th} — your hand scored ${score} (${actionWord})`],
+          drillExplain,
+          threshold: th,
+          suitedPts,
+          connPts,
+          nutPts,
+          dangler: false,
+          totalG,
+          aaPenaltyApplied: false,
+          archetype
+        };
+      }
+
+      if (archetype === "KK") {
+        score = 65;
+        if (aceCount >= 1) score += 12;
+        if (sm.isTripleOrQuad) {
+          suitedPts = -8;
+          score -= 8;
+        } else if (sm.isDoubleSuited) {
+          suitedPts = 15;
+          score += 15;
+        } else if (sm.isSingleSuited) {
+          suitedPts = 8;
+          score += 8;
+        } else {
+          suitedPts = 0;
+        }
+        const side = cards.filter(c => c[0] !== "K");
+        if (side.length === 2 && drillTwoCardWithin3(side)) score += 5;
+
+        score = Math.max(0, Math.min(100, Math.round(score)));
+        connPts = 0;
+        nutPts = score - suitedPts;
+
+        reasons.push("Archetype: pocket kings.");
+        reasons.push(suitedLabel);
+        const kkLine =
+          aceCount >= 1
+            ? "✓ Pocket Kings + Ace — strong open"
+            : `✓ Pocket Kings — open from ${position}`;
+        const drillExplain = buildDrillExplain3([kkLine, suitedLabel]);
+        action = score >= th ? "open" : "fold";
+        actionWord = action === "open" ? "open" : "fold";
+        return {
+          score,
+          action,
+          reasons: [...reasons, `📍 ${position} threshold: ${th} — your hand scored ${score} (${actionWord})`],
+          drillExplain,
+          threshold: th,
+          suitedPts,
+          connPts,
+          nutPts,
+          dangler: false,
+          totalG,
+          aaPenaltyApplied: false,
+          archetype
+        };
+      }
+
+      if (archetype === "QQ") {
+        score = 52;
+        if (aceCount >= 1) score += 12;
+        else if (kingCount >= 1) score += 7;
+        if (sm.isTripleOrQuad) {
+          suitedPts = -8;
+          score -= 8;
+        } else if (sm.isDoubleSuited) {
+          suitedPts = 14;
+          score += 14;
+        } else if (sm.isSingleSuited) {
+          suitedPts = 7;
+          score += 7;
+        } else {
+          suitedPts = 0;
+        }
+        const side = cards.filter(c => c[0] !== "Q");
+        if (side.length === 2 && drillTwoCardWithin3(side)) score += 5;
+        if (dangler) score -= 7;
+
+        score = Math.max(0, Math.min(100, Math.round(score)));
+        connPts = 0;
+        nutPts = score - suitedPts;
+
+        reasons.push("Archetype: pocket queens.");
+        reasons.push(suitedLabel);
+        const qqBits = [];
+        if (aceCount >= 1) qqBits.push("Ace kicker");
+        else if (kingCount >= 1) qqBits.push("King kicker");
+        if (side.length === 2 && drillTwoCardWithin3(side)) qqBits.push("side cards within 3 ranks");
+        let qqSummary = `✓ Pocket Queens — ${qqBits.length ? qqBits.join(", ") : "standard side cards"}`;
+        if (dangler && danglerInfo) {
+          qqSummary += `; dangler ${danglerInfo.danglerRank} off ${danglerInfo.chain}`;
+        }
+        const drillExplain = buildDrillExplain3([qqSummary, suitedLabel]);
+        action = score >= th ? "open" : "fold";
+        actionWord = action === "open" ? "open" : "fold";
+        return {
+          score,
+          action,
+          reasons: [
+            ...reasons,
+            ...(dangler && danglerInfo
+              ? [`✗ Dangler: the ${danglerInfo.danglerRank} doesn't connect with ${danglerInfo.chain}`]
+              : []),
+            `📍 ${position} threshold: ${th} — your hand scored ${score} (${actionWord})`
+          ],
+          drillExplain,
+          threshold: th,
+          suitedPts,
+          connPts,
+          nutPts,
+          dangler,
+          totalG,
+          aaPenaltyApplied: false,
+          archetype
+        };
+      }
+
+      if (archetype === "PAIR") {
+        const pairRanks = Object.entries(rankCounts)
+          .filter(([, n]) => n === 2)
+          .map(([r]) => r);
+        const pairRankChar = pairRanks.sort((a, b) => RANK_TO_VALUE[b] - RANK_TO_VALUE[a])[0];
+        const base = DRILL_PAIR_BASE[pairRankChar];
+        score = base != null ? base : 30;
+
+        if (sm.isTripleOrQuad) {
+          suitedPts = -8;
+          score -= 8;
+        } else if (sm.isDoubleSuited) {
+          suitedPts = 14;
+          score += 14;
+        } else if (sm.isSingleSuited) {
+          suitedPts = 7;
+          score += 7;
+        } else {
+          suitedPts = 0;
+        }
+
+        if (totalG === 0) {
+          connPts = 12;
+          score += 12;
+          connLabel = `✓ Perfect rundown with pair: ${drillRundownRankString(cards)}, zero gaps`;
+        } else if (totalG === 1) {
+          connPts = 8;
+          score += 8;
+          connLabel = "Side structure: one total rank gap with the pair.";
+        } else if (totalG === 2) {
+          connPts = 4;
+          score += 4;
+          connLabel = "Side structure: two total rank gaps with the pair.";
+        } else {
+          connPts = 0;
+          connLabel = "Side structure: loose — three or more total gaps.";
+        }
+        if (dangler) {
+          score -= 10;
+          connLabel += " Dangler tax applied.";
+        }
+
+        const side = cards.filter(c => c[0] !== pairRankChar);
+        if (side.length === 2 && side.every(c => RANK_TO_VALUE[c[0]] >= 10)) {
+          score += 6;
+        }
+
+        score = Math.max(0, Math.min(100, Math.round(score)));
+        nutPts = score - suitedPts - connPts;
+
+        reasons.push(`Archetype: ${drillPairPrettyName(pairRankChar)}.`);
+        reasons.push(suitedLabel);
+        reasons.push(connLabel);
+        if (dangler && danglerInfo) {
+          reasons.push(`✗ Dangler: the ${danglerInfo.danglerRank} doesn't connect with ${danglerInfo.chain}`);
+        }
+
+        const prName = drillPairPrettyName(pairRankChar);
+        const pairBits = [];
+        if (totalG === 0) pairBits.push("perfect rundown with pair");
+        else if (totalG === 1) pairBits.push("one gap with pair");
+        else if (totalG === 2) pairBits.push("two gaps with pair");
+        if (side.length === 2 && side.every(c => RANK_TO_VALUE[c[0]] >= 10)) pairBits.push("both kickers T+");
+        if (dangler && danglerInfo) {
+          pairBits.push(`dangler ${danglerInfo.danglerRank} off ${danglerInfo.chain}`);
+        } else if (dangler) {
+          pairBits.push("dangler tax");
+        }
+        let pairSummary = `✓ ${prName} — ${pairBits.join("; ") || "kicker-dependent"}`;
+        const drillExplain = buildDrillExplain3([pairSummary, suitedLabel]);
+        action = score >= th ? "open" : "fold";
+        actionWord = action === "open" ? "open" : "fold";
+        return {
+          score,
+          action,
+          reasons: [...reasons, `📍 ${position} threshold: ${th} — your hand scored ${score} (${actionWord})`],
+          drillExplain,
+          threshold: th,
+          suitedPts,
+          connPts,
+          nutPts,
+          dangler,
+          totalG,
+          aaPenaltyApplied: false,
+          archetype
+        };
+      }
+
+      /* ARCHETYPE_RUNDOWN — legacy feature scoring */
+      archetype = "RUNDOWN";
+      if (sm.isTripleOrQuad) {
+        suitedPts = 6;
+      } else if (sm.isDoubleSuited) {
+        suitedPts = 25;
+      } else if (sm.isSingleSuited) {
+        suitedPts = 13;
+      } else if (sm.isRainbow) {
+        suitedPts = 0;
+      } else {
+        suitedPts = 0;
+      }
+
       if (totalG === 0) connPts = 30;
       else if (totalG === 1) connPts = 24;
       else if (totalG === 2) connPts = 18;
       else if (totalG === 3) connPts = 12;
       else connPts = 6;
-
       if (totalG >= 4 || dangler) connPts = Math.min(connPts, 6);
 
-      let connLabel = "";
       if (totalG === 0) {
         connLabel = `✓ Perfect rundown: ${drillRundownRankString(cards)}, zero gaps`;
       } else if (totalG === 1) {
@@ -1160,101 +1514,39 @@
         connLabel = "Connectivity: poor — four or more total rank gaps.";
       }
 
-      const rankCounts = {};
-      for (const c of cards) {
-        const r = c[0];
-        rankCounts[r] = (rankCounts[r] || 0) + 1;
-      }
-      const aa = (rankCounts.A || 0) >= 2;
-      const kk = (rankCounts.K || 0) >= 2;
-      const aceCount = rankCounts.A || 0;
-      const broadwayCount = cards.filter(c => RANK_TO_VALUE[c[0]] >= 10).length;
-
-      let nutPts = 0;
-      let nutLabel = "";
-      if (aa) {
-        nutPts = 25;
-        nutLabel = "Pair of aces — top of range.";
-      } else if (kk) {
-        if (isDoubleSuited) {
-          nutPts = 22;
-          nutLabel = "Kings double suited — strong premium.";
-        } else if (isSingleSuited) {
-          nutPts = 16;
-          nutLabel = "Kings single suited — solid but not the top tier.";
-        } else {
-          nutPts = 10;
-          nutLabel = "Kings without strong suited shape — more fragile.";
-        }
-      } else if (aceCount === 1) {
-        nutPts = 10;
-        nutLabel = "Single ace — nut potential without a pair.";
-      }
-
-      const broadwayAdd = Math.min(8, broadwayCount * 2);
-      nutPts += broadwayAdd;
+      nutPts = 0;
+      if (aceCount >= 1) nutPts += 10;
+      nutPts += Math.min(8, broadwayCount * 2);
       nutPts = Math.min(25, nutPts);
-
-      const aaRainbowLowConn = aa && isRainbow && totalG >= 3;
-      let aaPenaltyApplied = false;
-      if (aaRainbowLowConn) {
-        nutPts = Math.max(0, nutPts - 5);
-        aaPenaltyApplied = true;
-      }
-
-      if (broadwayAdd > 0 && !aa) {
-        nutLabel = nutLabel
-          ? `${nutLabel} Broadway density adds up to ${broadwayAdd} pts here.`
-          : `Broadway-heavy — up to ${broadwayAdd} pts from high-card density.`;
-      }
 
       let raw = suitedPts + connPts + nutPts;
       if (dangler) raw -= 15;
-      const score = Math.max(0, Math.min(100, Math.round(raw)));
-
-      const th = PREFLOP_OPEN_THRESHOLDS[position] ?? 55;
-      const action = score >= th ? "open" : "fold";
-      const actionWord = action === "open" ? "open" : "fold";
+      score = Math.max(0, Math.min(100, Math.round(raw)));
 
       reasons.push(suitedLabel);
       reasons.push(connLabel);
       if (dangler && danglerInfo) {
         reasons.push(`✗ Dangler: the ${danglerInfo.danglerRank} doesn't connect with ${danglerInfo.chain}`);
-      } else if (dangler) {
-        reasons.push("✗ Dangler hurts this hand.");
-      } else if (totalG <= 1) {
+      } else if (!dangler && totalG <= 1) {
         reasons.push("✓ Cohesive structure without a dangler.");
       }
 
-      const posBullet = `📍 ${position} threshold: ${th} — your hand scored ${score} (${actionWord})`;
-      reasons.push(posBullet);
-
-      const featLines = [];
+      let rundownPrimary;
       if (dangler && danglerInfo) {
-        featLines.push(`✗ Dangler: the ${danglerInfo.danglerRank} doesn't connect with ${danglerInfo.chain}`);
+        rundownPrimary = `✗ Dangler: the ${danglerInfo.danglerRank} doesn't connect with ${danglerInfo.chain}`;
+      } else if (totalG === 0) {
+        rundownPrimary = `✓ Perfect rundown: ${drillRundownRankString(cards)}, zero gaps`;
+      } else {
+        rundownPrimary = connLabel;
       }
-      if (aaPenaltyApplied) {
-        featLines.push("✗ Aces with no suits and no connectivity — reduced value");
-      }
-      const shapeLine =
-        totalG === 0
-          ? `✓ Perfect rundown: ${drillRundownRankString(cards)}, zero gaps`
-          : isTripleOrQuad || isDoubleSuited || isSingleSuited
-            ? suitedLabel
-            : connLabel;
-      featLines.push(shapeLine);
-      const seenF = new Set();
-      const featUnique = featLines.filter((x) => {
-        if (seenF.has(x)) return false;
-        seenF.add(x);
-        return true;
-      });
-      const drillExplain = [...featUnique.slice(0, 2), posBullet].slice(0, 3);
+      const drillExplain = buildDrillExplain3([rundownPrimary, suitedLabel]);
 
+      action = score >= th ? "open" : "fold";
+      actionWord = action === "open" ? "open" : "fold";
       return {
         score,
         action,
-        reasons,
+        reasons: [...reasons, `📍 ${position} threshold: ${th} — your hand scored ${score} (${actionWord})`],
         drillExplain,
         threshold: th,
         suitedPts,
@@ -1262,7 +1554,8 @@
         nutPts,
         dangler,
         totalG,
-        aaPenaltyApplied
+        aaPenaltyApplied: false,
+        archetype
       };
     }
 
