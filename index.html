@@ -398,6 +398,20 @@
       margin: 0;
       font-size: 0.96rem;
     }
+    .drill-position-row {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .drill-table-svg-wrap {
+      display: inline-flex;
+      align-items: center;
+      line-height: 0;
+    }
+    .drill-table-svg-wrap svg {
+      display: block;
+    }
     .drill-position-badge {
       display: inline-flex;
       align-items: center;
@@ -841,7 +855,10 @@
         <div class="drill-score-corner" id="drillRunningScore">0/0 correct</div>
         <div class="drill-head">
           <h2>Preflop Drill</h2>
-          <div class="drill-position-badge" id="drillPositionBadge">You are CO</div>
+          <div class="drill-position-row">
+            <div class="drill-position-badge" id="drillPositionBadge">You are CO</div>
+            <span class="drill-table-svg-wrap" id="drillTableDiagram" aria-hidden="true"></span>
+          </div>
         </div>
         <div class="board-panel">
           <h2>Your hand</h2>
@@ -1001,6 +1018,7 @@
       preflopDrillPanel: document.getElementById("preflopDrillPanel"),
       drillRunningScore: document.getElementById("drillRunningScore"),
       drillPositionBadge: document.getElementById("drillPositionBadge"),
+      drillTableDiagram: document.getElementById("drillTableDiagram"),
       drillCardsRow: document.getElementById("drillCardsRow"),
       drillOpenBtn: document.getElementById("drillOpenBtn"),
       drillFoldBtn: document.getElementById("drillFoldBtn"),
@@ -1614,10 +1632,36 @@
       preflopDrillState.justDealt = true;
     }
 
+    function renderDrillTableSvg(pos) {
+      const felt = "#0f3b2f";
+      const acc = "#38d39f";
+      const seats = [
+        ["UTG", 30, 58, 30, 71],
+        ["HJ", 16, 40, 16, 51],
+        ["CO", 34, 24, 34, 13],
+        ["BTN", 86, 24, 86, 13],
+        ["SB", 104, 40, 104, 51],
+        ["BB", 90, 58, 90, 71]
+      ];
+      let circ = "";
+      let lab = "";
+      for (const [id, cx, cy, tx, ty] of seats) {
+        const act = id === pos && id !== "BB";
+        const r = act ? 10 : 7;
+        const fl = act ? acc : "#2a4a40";
+        const op = act ? 1 : 0.38;
+        const fi = act ? "filter=\"url(#drillSeatGlow)\"" : "";
+        circ += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${fl}" opacity="${op}" ${fi}/>`;
+        lab += `<text x="${tx}" y="${ty}" text-anchor="middle" font-size="8" font-family="Inter,system-ui,-apple-system,sans-serif" fill="${act ? "#fff" : "rgba(255,255,255,0.6)"}">${id}</text>`;
+      }
+      return `<svg width="120" height="80" viewBox="0 0 120 80" xmlns="http://www.w3.org/2000/svg"><defs><filter id="drillSeatGlow" x="-80%" y="-80%" width="260%" height="260%"><feDropShadow dx="0" dy="0" stdDeviation="2.5" flood-color="${acc}" flood-opacity="0.8"/></filter></defs><ellipse cx="60" cy="40" rx="50" ry="26" fill="${felt}"/>${circ}${lab}</svg>`;
+    }
+
     function updatePreflopDrillPanel() {
       if (state.tab !== "preflopDrill") return;
       el.drillRunningScore.textContent = `${preflopDrillCorrect}/${preflopDrillTotal} correct`;
       el.drillPositionBadge.textContent = `You are ${preflopDrillState.position}`;
+      el.drillTableDiagram.innerHTML = renderDrillTableSvg(preflopDrillState.position);
       el.drillCardsRow.innerHTML = "";
       const runDealAnim = preflopDrillState.justDealt;
       preflopDrillState.justDealt = false;
