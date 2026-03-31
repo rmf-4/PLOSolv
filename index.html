@@ -400,6 +400,31 @@
       font-size: 0.78rem;
       color: #cfe2da;
     }
+    .timeline-list {
+      display: grid;
+      gap: 4px;
+      max-height: 180px;
+      overflow: auto;
+      margin-top: 6px;
+    }
+    .timeline-item {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 7px;
+      padding: 5px 7px;
+      font-size: 0.77rem;
+      color: #d9e9e2;
+    }
+    .coach-list {
+      margin-top: 6px;
+      display: grid;
+      gap: 5px;
+      font-size: 0.8rem;
+      color: #dcebe4;
+    }
     @media (max-width: 900px) {
       .range-grid { grid-template-columns: 1fr; }
       .review-grid { grid-template-columns: 1fr; }
@@ -611,6 +636,16 @@
         <h2>Street Odds (P1 vs P2)</h2>
         <div class="explorer-results" id="reviewStreetResults"></div>
       </div>
+      <div class="review-grid">
+        <div class="review-card">
+          <div><strong>Action + Pot Timeline</strong></div>
+          <div class="timeline-list" id="reviewTimeline"></div>
+        </div>
+        <div class="review-card">
+          <div><strong>Coach Mode</strong></div>
+          <div class="coach-list" id="reviewCoach"></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -685,7 +720,9 @@
       reviewSummary: document.getElementById("reviewSummary"),
       reviewPlayers: document.getElementById("reviewPlayers"),
       reviewPlayersGrid: document.getElementById("reviewPlayersGrid"),
-      reviewStreetResults: document.getElementById("reviewStreetResults")
+      reviewStreetResults: document.getElementById("reviewStreetResults"),
+      reviewTimeline: document.getElementById("reviewTimeline"),
+      reviewCoach: document.getElementById("reviewCoach")
     };
 
     function fullDeck() {
@@ -1606,6 +1643,75 @@
       return { trials, equities };
     }
 
+    function parseTimelineEvents(data, players) {
+      const seatToName = new Map(players.map(p => [p.seat, p.name]));
+      const timeline = [];
+      let pot = 0;
+      for (const ev of data.events || []) {
+        const p = ev.payload || {};
+        const seatName = p.seat ? (seatToName.get(p.seat) || `Seat ${p.seat}`) : null;
+        const value = Number(p.value || 0);
+        let label = null;
+        if (p.type === 2) label = `${seatName || "Player"} posts blind ${value}`;
+        else if (p.type === 3) label = `${seatName || "Player"} posts blind/ante ${value}`;
+        else if (p.type === 7) label = `${seatName || "Player"} calls ${value}${p.allIn ? " (all-in)" : ""}`;
+        else if (p.type === 8) label = `${seatName || "Player"} bets/raises to ${value}${p.allIn ? " (all-in)" : ""}`;
+        else if (p.type === 11) label = `${seatName || "Player"} folds`;
+        else if (p.type === 9) {
+          const streetMap = { 1: "Flop", 2: "Turn", 3: "River" };
+          const cards = Array.isArray(p.cards) ? p.cards.map(cardToPretty).join(" ") : "";
+          label = `Board ${streetMap[p.turn] || `Turn ${p.turn}`}${p.run ? ` (Run ${p.run})` : ""}: ${cards}`;
+        } else if (p.type === 10) {
+          const winner = seatName || `Seat ${p.seat}`;
+          label = `${winner} wins ${value} with ${p.handDescription || "showdown hand"}`;
+        }
+        if (!label) continue;
+        if ([2, 3, 7, 8].includes(p.type)) pot += value;
+        if (p.type === 10) pot = Math.max(0, pot - value);
+        timeline.push({ label, pot });
+      }
+      return timeline;
+    }
+
+    function buildCoachNotes(review) {
+      const notes = [];
+      const run1 = review.results.filter(r => r.run === 1 || (r.run == null && r.street !== "Preflop"));
+      const pre = review.results.find(r => r.street === "Preflop");
+      const flop = run1.find(r => r.street === "Flop");
+      const turn = run1.find(r => r.street === "Turn");
+      const river = run1.find(r => r.street === "River");
+      if (!pre) return ["No preflop equity data available."];
+      const leaderIdx = pre.equities.indexOf(Math.max(...pre.equities));
+      notes.push(`Preflop favorite: P${leaderIdx + 1} at ${(pre.equities[leaderIdx] * 100).toFixed(1)}%.`);
+      function swing(from, to, streetName) {
+        if (!from || !to) return;
+        let bestI = 0;
+        let bestDelta = 0;
+        for (let i = 0; i < to.equities.length; i++) {
+          const d = to.equities[i] - from.equities[i];
+          if (Math.abs(d) > Math.abs(bestDelta)) {
+            bestDelta = d;
+            bestI = i;
+          }
+        }
+        if (Math.abs(bestDelta) >= 0.05) {
+          const dir = bestDelta > 0 ? "gained" : "lost";
+          notes.push(`${streetName} inflection: P${bestI + 1} ${dir} ${Math.abs(bestDelta * 100).toFixed(1)} equity points.`);
+        }
+      }
+      swing(pre, flop, "Flop");
+      swing(flop || pre, turn, "Turn");
+      swing(turn || flop || pre, river, "River");
+      if (river) {
+        const maxEq = Math.max(...river.equities);
+        const winners = river.equities.map((v, i) => ({ v, i })).filter(x => Math.abs(x.v - maxEq) < 1e-9);
+        if (winners.length > 1) notes.push(`River finishes as chopped equity between ${winners.map(w => `P${w.i + 1}`).join(", ")}.`);
+        else notes.push(`River winner by equity: P${winners[0].i + 1} (${(maxEq * 100).toFixed(1)}%).`);
+      }
+      if (notes.length < 2) notes.push("Action likely standard; no major equity swing detected.");
+      return notes;
+    }
+
     function extractRunBoards(data) {
       const boardEvents = (data.events || [])
         .map(e => e.payload || {})
@@ -1968,6 +2074,8 @@
         const runTxt = review.runs.length ? `Runs: ${review.runs.map(r => `#${r.run}`).join(", ")}` : "Runs: not detected";
         el.reviewSummary.textContent = `Hand #${review.data.number || "?"} | Blinds ${review.data.smallBlind}/${review.data.bigBlind} | ${runTxt}`;
         el.reviewPlayers.textContent = `Players involved (${review.players.length}): ${review.players.map(p => p.name).join(", ")}`;
+        el.reviewTimeline.innerHTML = "";
+        el.reviewCoach.innerHTML = "";
         el.reviewPlayersGrid.innerHTML = "";
         review.players.forEach((p, i) => {
           const box = document.createElement("div");
@@ -2019,9 +2127,33 @@
           }
         }
 
+        const timeline = parseTimelineEvents(review.data, review.players);
+        if (!timeline.length) {
+          const empty = document.createElement("div");
+          empty.className = "timeline-item";
+          empty.textContent = "No timeline events found.";
+          el.reviewTimeline.appendChild(empty);
+        } else {
+          for (const item of timeline.slice(0, 140)) {
+            const row = document.createElement("div");
+            row.className = "timeline-item";
+            row.innerHTML = `<span>${item.label}</span><span>Pot~ ${item.pot}</span>`;
+            el.reviewTimeline.appendChild(row);
+          }
+        }
+
+        const notes = buildCoachNotes(review);
+        for (const n of notes) {
+          const line = document.createElement("div");
+          line.textContent = `- ${n}`;
+          el.reviewCoach.appendChild(line);
+        }
+
         el.status.textContent = "PokerNow review complete.";
       } catch (err) {
         el.reviewSummary.textContent = `Analysis failed: ${err.message}`;
+        el.reviewTimeline.innerHTML = "";
+        el.reviewCoach.innerHTML = "";
         el.status.textContent = `Review error: ${err.message}`;
       }
     });
