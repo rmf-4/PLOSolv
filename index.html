@@ -1954,6 +1954,12 @@
       return unique.slice(0, 9);
     }
 
+    function normalizeReviewRunKey(run) {
+      if (run == null || run === "") return 0;
+      const n = Number(run);
+      return Number.isFinite(n) ? n : 0;
+    }
+
     function detectHeroAllInStreet(review, heroIdx) {
       const heroSeat = review.players?.[heroIdx]?.seat;
       if (!heroSeat || !review.data?.events) return null;
@@ -1974,9 +1980,10 @@
 
     function buildCoachNotes(review, heroIdx) {
       const notes = [];
-      const run1 = review.results.filter(r => r.run === 1 || (r.run == null && r.street !== "Preflop"));
+      const run1 = review.results.filter(r => normalizeReviewRunKey(r.run) === 1);
       const pre = review.results.find(r => r.street === "Preflop");
       const flop = run1.find(r => r.street === "Flop");
+      const flopCombined = review.results.find(r => normalizeReviewRunKey(r.run) === 0 && r.street === "Flop");
       const turn = run1.find(r => r.street === "Turn");
       const river = run1.find(r => r.street === "River");
       if (!pre) return ["No preflop equity data available."];
@@ -1984,6 +1991,7 @@
       const heroName = review.players[heroIdx]?.name || `P${heroIdx + 1}`;
       const heroPre = pre.equities[heroIdx] || 0;
       const heroAllInStreet = detectHeroAllInStreet(review, heroIdx);
+      const flopAllIn = heroAllInStreet === "Flop";
       notes.push(`You are ${heroName} (P${heroIdx + 1}).`);
       function swing(from, to, streetName) {
         if (!from || !to) return;
@@ -2001,19 +2009,31 @@
           notes.push(`${streetName} inflection: P${bestI + 1} ${dir} ${Math.abs(bestDelta * 100).toFixed(1)} equity points.`);
         }
       }
-      swing(pre, flop, "Flop");
-      swing(flop || pre, turn, "Turn");
-      swing(turn || flop || pre, river, "River");
-      const heroFlop = flop ? flop.equities[heroIdx] : heroPre;
+      swing(pre, flopCombined || flop, "Flop");
+      if (!flopAllIn) {
+        swing(flop || pre, turn, "Turn");
+        swing(turn || flop || pre, river, "River");
+      } else if (turn || river) {
+        notes.push("Turn/river swings are runout-only — no decisions remain after a flop stack-off.");
+      }
+      const heroFlop = (flopCombined || flop) ? (flopCombined || flop).equities[heroIdx] : heroPre;
       const heroTurn = turn ? turn.equities[heroIdx] : heroFlop;
       const heroRiver = river ? river.equities[heroIdx] : heroTurn;
       const heroNet = heroRiver - heroPre;
       const headline = [];
       const lockedEarly = heroAllInStreet === "Preflop" || heroAllInStreet === "Flop";
-      const verdict =
+      let verdict =
         heroAllInStreet && heroNet < -0.1 ? "VERDICT: Mostly variance (you were all-in before runout)." :
         (!heroAllInStreet && heroNet < -0.1 ? "VERDICT: Likely leak in continue strategy." :
         (heroNet > 0.1 ? "VERDICT: Good line and strong realization." : "VERDICT: Close to neutral / mixed."));
+      if (flopAllIn && heroFlop >= 0.65 && heroRiver <= 0.08) {
+        verdict = "VERDICT: Cooler-style runout — you stacked a large flop favorite; losing is mostly variance.";
+      } else if (flopAllIn && heroFlop >= 0.55) {
+        verdict = "VERDICT: Judge this hand by flop stack-off equity, not by preflop or by the final river.";
+      }
+      if (flopAllIn) {
+        headline.push(`Primary spot: flop all-in — ~${(heroFlop * 100).toFixed(1)}% at stack-off (preflop ${(heroPre * 100).toFixed(1)}% is background only).`);
+      }
       headline.push(verdict);
       headline.push(`Actionable summary: Pre ${(heroPre * 100).toFixed(1)} -> Flop ${(heroFlop * 100).toFixed(1)} -> Turn ${(heroTurn * 100).toFixed(1)} -> River ${(heroRiver * 100).toFixed(1)}.`);
       if (lockedEarly) {
@@ -2047,13 +2067,19 @@
         headline.push("Leak check: large flop->turn equity drop; likely over-calling turn with non-nut structures.");
       }
       const preGap = heroPre - pre.equities[leaderIdx];
-      if (preGap <= -0.12) {
-        headline.push("Range note: preflop equity deficit vs leader; tighten preflop continues and bias to nuttier structures.");
-      } else if (preGap >= 0.08) {
-        headline.push("Range note: preflop edge present; support higher aggression frequencies on favorable board interaction.");
+      if (!flopAllIn) {
+        if (preGap <= -0.12) {
+          headline.push("Range note: preflop equity deficit vs leader; tighten preflop continues and bias to nuttier structures.");
+        } else if (preGap >= 0.08) {
+          headline.push("Range note: preflop edge present; support higher aggression frequencies on favorable board interaction.");
+        }
       }
       notes.push(...headline);
-      notes.push(`Reference: table preflop favorite P${leaderIdx + 1} at ${(pre.equities[leaderIdx] * 100).toFixed(1)}%.`);
+      if (flopAllIn) {
+        notes.push(`Reference: stack-off equity on this flop is what matters; preflop favorite was P${leaderIdx + 1} at ${(pre.equities[leaderIdx] * 100).toFixed(1)}% (context only).`);
+      } else {
+        notes.push(`Reference: table preflop favorite P${leaderIdx + 1} at ${(pre.equities[leaderIdx] * 100).toFixed(1)}%.`);
+      }
       if (notes.length < 2) notes.push("Action likely standard; no major equity swing detected.");
       return notes;
     }
@@ -2147,7 +2173,12 @@
           setProgress(pct, `Computing ${job.street}${job.run ? ` (Run ${job.run})` : ""}`);
         });
         if (r.error) throw new Error(r.error);
-        allResults.push({ run: job.run, street: job.street, board: job.cards, ...r });
+        allResults.push({
+          ...r,
+          run: job.run,
+          street: job.street,
+          board: Array.isArray(job.cards) ? job.cards.slice() : job.cards
+        });
         await yieldUi();
       }
       setProgress(100, "Finalizing");
@@ -2494,17 +2525,20 @@
 
         const grouped = new Map();
         for (const r of review.results) {
-          const key = r.run || 0;
+          const key = normalizeReviewRunKey(r.run);
           if (!grouped.has(key)) grouped.set(key, []);
           grouped.get(key).push(r);
         }
         const sortedKeys = [...grouped.keys()].sort((a, b) => a - b);
+        const streetRank = { Preflop: 0, Flop: 1, Turn: 2, River: 3 };
         for (const key of sortedKeys) {
           const header = document.createElement("div");
           header.className = "review-row";
           header.innerHTML = `<span><strong>${key === 0 ? "Combined" : `Run #${key}`}</strong></span><span></span>`;
           el.reviewStreetResults.appendChild(header);
-          const rows = grouped.get(key);
+          const rows = grouped.get(key).slice().sort((a, b) =>
+            (streetRank[a.street] ?? 99) - (streetRank[b.street] ?? 99)
+          );
           for (const row of rows) {
             if (key > 0 && row.street === "Flop" && review.runs.length > 1) continue;
             const div = document.createElement("div");
@@ -2519,7 +2553,9 @@
           }
         }
         if (review.runs.length > 1) {
-          const riverByRun = review.results.filter(r => r.street === "River" && r.run && r.equities);
+          const riverByRun = review.results.filter(r =>
+            r.street === "River" && normalizeReviewRunKey(r.run) > 0 && r.equities
+          );
           if (riverByRun.length >= 2) {
             const avgEq = review.players.map((_, i) => riverByRun.reduce((s, r) => s + r.equities[i], 0) / riverByRun.length);
             const avgTxt = avgEq.map((v, i) => `P${i + 1} ${(v * 100).toFixed(2)}%`).join(" | ");
