@@ -1139,7 +1139,7 @@
       return v[0] - v[1] <= 3;
     }
 
-    const DRILL_PAIR_BASE = { J: 30, T: 27, 9: 24, 8: 21, 7: 18, 6: 15, 5: 12, 4: 10, 3: 8, 2: 6 };
+    const DRILL_PAIR_BASE = { J: 38, T: 34, 9: 30, 8: 26, 7: 22, 6: 18, 5: 14, 4: 11, 3: 9, 2: 7 };
 
     function drillPairPrettyName(rankChar) {
       const m = {
@@ -1401,9 +1401,22 @@
         const base = DRILL_PAIR_BASE[pairRankChar];
         score = base != null ? base : 30;
 
+        const pairAce = aceCount >= 1;
+        let pairSuitedLabel = suitedLabel;
         if (sm.isTripleOrQuad) {
-          suitedPts = -8;
-          score -= 8;
+          const heavyEntry = Object.entries(suitHist).find(([, n]) => n >= 3);
+          const heavySuitId = heavyEntry ? heavyEntry[0] : null;
+          const aceSharesHeavySuit =
+            heavySuitId != null && cards.some(c => c[0] === "A" && c[1] === heavySuitId);
+          if (aceSharesHeavySuit) {
+            suitedPts = -2;
+            score -= 2;
+            pairSuitedLabel =
+              "✗ Flush blocker (three of one suit) — but Ace of that suit retains nut flush draw";
+          } else {
+            suitedPts = -8;
+            score -= 8;
+          }
         } else if (sm.isDoubleSuited) {
           suitedPts = 14;
           score += 14;
@@ -1430,9 +1443,18 @@
           connPts = 0;
           connLabel = "Side structure: loose — three or more total gaps.";
         }
-        if (dangler) {
-          score -= 10;
-          connLabel += " Dangler tax applied.";
+
+        let pairDanglerForPair = false;
+        if (!pairAce) {
+          pairDanglerForPair = dangler;
+          if (pairDanglerForPair) {
+            score -= 10;
+            connLabel += " Dangler tax applied.";
+          }
+        }
+
+        if (pairAce) {
+          score += 4;
         }
 
         const side = cards.filter(c => c[0] !== pairRankChar);
@@ -1443,10 +1465,16 @@
         score = Math.max(0, Math.min(100, Math.round(score)));
         nutPts = score - suitedPts - connPts;
 
+        const aceKickerBullet =
+          "✓ Ace kicker — premium side card on pair hands, not penalized as dangler.";
+
         reasons.push(`Archetype: ${drillPairPrettyName(pairRankChar)}.`);
-        reasons.push(suitedLabel);
+        reasons.push(pairSuitedLabel);
         reasons.push(connLabel);
-        if (dangler && danglerInfo) {
+        if (pairAce) {
+          reasons.push(aceKickerBullet);
+        }
+        if (!pairAce && pairDanglerForPair && danglerInfo) {
           reasons.push(`✗ Dangler: the ${danglerInfo.danglerRank} doesn't connect with ${danglerInfo.chain}`);
         }
 
@@ -1456,25 +1484,30 @@
         else if (totalG === 1) pairBits.push("one gap with pair");
         else if (totalG === 2) pairBits.push("two gaps with pair");
         if (side.length === 2 && side.every(c => RANK_TO_VALUE[c[0]] >= 10)) pairBits.push("both kickers T+");
-        if (dangler && danglerInfo) {
+        if (!pairAce && pairDanglerForPair && danglerInfo) {
           pairBits.push(`dangler ${danglerInfo.danglerRank} off ${danglerInfo.chain}`);
-        } else if (dangler) {
+        } else if (pairDanglerForPair) {
           pairBits.push("dangler tax");
         }
         let pairSummary = `✓ ${prName} — ${pairBits.join("; ") || "kicker-dependent"}`;
-        const drillExplain = buildDrillExplain3([pairSummary, suitedLabel]);
+
         action = score >= th ? "open" : "fold";
         actionWord = action === "open" ? "open" : "fold";
+        const posStr = `📍 ${position} threshold: ${th} — your hand scored ${score} (${actionWord})`;
+        const drillExplain = pairAce
+          ? [pairSummary, aceKickerBullet, posStr]
+          : buildDrillExplain3([pairSummary, pairSuitedLabel]);
+
         return {
           score,
           action,
-          reasons: [...reasons, `📍 ${position} threshold: ${th} — your hand scored ${score} (${actionWord})`],
+          reasons: [...reasons, posStr],
           drillExplain,
           threshold: th,
           suitedPts,
           connPts,
           nutPts,
-          dangler,
+          dangler: pairAce ? false : pairDanglerForPair,
           totalG,
           aaPenaltyApplied: false,
           archetype
