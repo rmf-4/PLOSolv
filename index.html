@@ -864,7 +864,7 @@
     }
     .drill-actions {
       display: flex;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
       gap: 10px;
       margin-top: 0;
     }
@@ -897,6 +897,11 @@
     button.drill-big-btn.drill-fold {
       color: #f0f7f3;
       background: #1a2923;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+    }
+    button.drill-big-btn.drill-call {
+      color: #f0f7f3;
+      background: linear-gradient(180deg, #2b3f53, #223246);
       border: 1px solid rgba(255, 255, 255, 0.14);
     }
     .drill-verdict {
@@ -1318,6 +1323,7 @@
         </div>
         <div class="drill-actions" id="drillChoiceRow">
           <button type="button" class="drill-big-btn drill-open" id="drillOpenBtn">OPEN</button>
+          <button type="button" class="drill-big-btn drill-call hidden" id="drillCallBtn">CALL</button>
           <button type="button" class="drill-big-btn drill-fold" id="drillFoldBtn">FOLD</button>
         </div>
         <p class="drill-key-hint" id="drillKeyHint">R = raise/open · F = fold · N or Space = next hand</p>
@@ -1432,13 +1438,32 @@
 
     const PREFLOP_DRILL_POSITIONS = ["UTG", "HJ", "CO", "BTN", "SB"];
     const DRILL_ORBIT_POSITIONS = ["UTG", "HJ", "CO", "BTN", "SB", "BB"];
-    const DRILL_STATS_POSITIONS = ["UTG", "HJ", "CO", "BTN", "SB", "SB_3bet", "BB", "BB_squeeze"];
+    const DRILL_STATS_POSITIONS = ["UTG", "HJ", "HJ_vs_open", "CO", "CO_vs_open", "BTN", "BTN_vs_open", "SB", "SB_3bet", "BB", "BB_squeeze"];
     const PREFLOP_OPEN_THRESHOLDS = { UTG: 62, HJ: 55, CO: 48, BTN: 38, SB: 33 };
     const BB_DEFENSE_VS = { UTG: 14, HJ: 20, CO: 28, BTN: 50, SB: 40 };
     const BB_OPENER_WEIGHTS = { UTG: 10, HJ: 15, CO: 25, BTN: 35, SB: 15 };
     const BB_SQUEEZE_VS = { UTG: 8, HJ: 10, CO: 14, BTN: 18, SB: 12 };
     const SB_3BET_VS = { UTG: 6, HJ: 8, CO: 11, BTN: 15 };
     const SB_VS_OPEN_WEIGHTS = { BTN: 40, CO: 30, HJ: 20, UTG: 10 };
+    const FACING_OPEN_PROB = { HJ: 0.45, CO: 0.55, BTN: 0.65 };
+    const HJ_FACING_OPEN_WEIGHTS = { UTG: 100 };
+    const CO_FACING_OPEN_WEIGHTS = { HJ: 60, UTG: 40 };
+    const BTN_FACING_OPEN_WEIGHTS = { CO: 50, HJ: 30, UTG: 20 };
+    const THREE_BET_FREQ = {
+      HJ: { UTG: 6 },
+      CO: { UTG: 7, HJ: 9 },
+      BTN: { UTG: 8, HJ: 10, CO: 13 }
+    };
+    const CALL_FREQ = {
+      HJ: { UTG: 12 },
+      CO: { UTG: 14, HJ: 16 },
+      BTN: { UTG: 18, HJ: 20, CO: 22 }
+    };
+    const GTO_3BET_PCT = {
+      HJ_vs_open: 6,
+      CO_vs_open: 8,
+      BTN_vs_open: 10
+    };
     const DRILL_ORBIT_WORST_HINT = {
       UTG: "Toughest spot: UTG — review opening ranges from under the gun",
       HJ: "Toughest spot: HJ — review hijack opening ranges",
@@ -1460,15 +1485,21 @@
         correct: 0,
         total: 0,
         opened: 0,
+        threeBet: 0,
+        called: 0,
         folded: 0,
         correctOpens: 0,
+        correctCalls: 0,
         correctFolds: 0
       });
       return {
         UTG: row(),
         HJ: row(),
+        HJ_vs_open: row(),
         CO: row(),
+        CO_vs_open: row(),
         BTN: row(),
+        BTN_vs_open: row(),
         SB: row(),
         SB_3bet: row(),
         BB: row(),
@@ -1536,6 +1567,8 @@
       orbitCount: 1,
       sbScenario: null,
       sbVsOpener: null,
+      facingOpen: false,
+      facingOpenFrom: null,
       bbVsOpener: null,
       bbSqueezeScenario: false,
       bbSqueezeCaller: null,
@@ -1605,6 +1638,7 @@
       drillTableDiagram: document.getElementById("drillTableDiagram"),
       drillCardsRow: document.getElementById("drillCardsRow"),
       drillOpenBtn: document.getElementById("drillOpenBtn"),
+      drillCallBtn: document.getElementById("drillCallBtn"),
       drillFoldBtn: document.getElementById("drillFoldBtn"),
       drillVerdictPanel: document.getElementById("drillVerdictPanel"),
       drillVerdictTitle: document.getElementById("drillVerdictTitle"),
@@ -2243,6 +2277,8 @@
       preflopDrillState.orbitCount = 1;
       preflopDrillState.sbScenario = null;
       preflopDrillState.sbVsOpener = null;
+      preflopDrillState.facingOpen = false;
+      preflopDrillState.facingOpenFrom = null;
       preflopDrillState.bbVsOpener = null;
       preflopDrillState.bbSqueezeScenario = false;
       preflopDrillState.bbSqueezeCaller = null;
@@ -2253,6 +2289,45 @@
 
     function scorePLOHandForDrill(cards, position) {
       const m = preflopDrillState.mode === "orbit";
+      if (
+        m &&
+        preflopDrillState.facingOpen &&
+        (position === "HJ" || position === "CO" || position === "BTN") &&
+        preflopDrillState.facingOpenFrom &&
+        THREE_BET_FREQ[position] &&
+        THREE_BET_FREQ[position][preflopDrillState.facingOpenFrom] != null &&
+        CALL_FREQ[position] &&
+        CALL_FREQ[position][preflopDrillState.facingOpenFrom] != null
+      ) {
+        const base = scorePLOHand(cards, position);
+        const from = preflopDrillState.facingOpenFrom;
+        const threePct = THREE_BET_FREQ[position][from];
+        const callPct = CALL_FREQ[position][from];
+        const threeBetThreshold = 100 - threePct;
+        const callThreshold = 100 - (threePct + callPct);
+        let action = "fold";
+        if (base.score >= threeBetThreshold) action = "open";
+        else if (base.score >= callThreshold) action = "call";
+        const actWord = action === "open" ? "3-bet" : action === "call" ? "call" : "fold";
+        const exLine = `📍 ${position} vs ${from} open — 3-bet top ${threePct}%, call next ${callPct}%, fold the rest. Your hand scored ${base.score} (${actWord})`;
+        const reasons = base.reasons.filter((x) => typeof x !== "string" || !x.startsWith("📍"));
+        reasons.push(exLine);
+        const drillExplain = [];
+        for (const line of base.drillExplain || []) {
+          if (typeof line === "string" && line.startsWith("📍")) continue;
+          drillExplain.push(line);
+          if (drillExplain.length >= 2) break;
+        }
+        drillExplain.push(exLine);
+        return {
+          ...base,
+          action,
+          threshold: threeBetThreshold,
+          callThreshold,
+          reasons,
+          drillExplain: drillExplain.slice(0, 3)
+        };
+      }
       if (m && position === "SB" && preflopDrillState.sbScenario === "facing_open" && preflopDrillState.sbVsOpener) {
         const base = scorePLOHand(cards, "SB");
         const r = preflopDrillState.sbVsOpener;
@@ -2331,16 +2406,37 @@
 
     const DRILL_DEAL_MARGIN = 12;
     const DRILL_DEAL_TARGET = { open: 0.35, fold: 0.35, marginal: 0.3 };
+    const DRILL_DEAL_TARGET_FACING_OPEN = { open: 0.25, call: 0.3, marginal: 0.15, fold: 0.3 };
 
-    function drillClassifyDealBucket(score, threshold, margin) {
-      const isOpen = score >= threshold + margin;
-      const isFold = score < threshold - margin;
+    function drillClassifyDealBucket(ev, margin) {
+      if (preflopDrillState.facingOpen && ev.callThreshold != null) {
+        if (ev.score >= ev.threshold + margin) return "open";
+        if (ev.score >= ev.threshold - margin) return "marginal";
+        if (ev.score >= ev.callThreshold + margin) return "call";
+        if (ev.score >= ev.callThreshold - margin) return "marginal";
+        return "fold";
+      }
+      const isOpen = ev.score >= ev.threshold + margin;
+      const isFold = ev.score < ev.threshold - margin;
       if (isOpen) return "open";
       if (isFold) return "fold";
       return "marginal";
     }
 
     function drillPickWeightedDealBucket() {
+      if (preflopDrillState.facingOpen) {
+        const r = Math.random();
+        if (r < DRILL_DEAL_TARGET_FACING_OPEN.open) return "open";
+        if (r < DRILL_DEAL_TARGET_FACING_OPEN.open + DRILL_DEAL_TARGET_FACING_OPEN.call) return "call";
+        if (
+          r <
+          DRILL_DEAL_TARGET_FACING_OPEN.open +
+            DRILL_DEAL_TARGET_FACING_OPEN.call +
+            DRILL_DEAL_TARGET_FACING_OPEN.marginal
+        )
+          return "marginal";
+        return "fold";
+      }
       const r = Math.random();
       if (r < DRILL_DEAL_TARGET.open) return "open";
       if (r < DRILL_DEAL_TARGET.open + DRILL_DEAL_TARGET.fold) return "fold";
@@ -2364,7 +2460,7 @@
       for (let attempts = 0; attempts < 100; attempts++) {
         const cards = drillDealFourCardsFisherYates();
         const ev = scorePLOHandForDrill(cards.slice(), position);
-        const cat = drillClassifyDealBucket(ev.score, ev.threshold, DRILL_DEAL_MARGIN);
+        const cat = drillClassifyDealBucket(ev, DRILL_DEAL_MARGIN);
         if (cat === bucket) {
           preflopDrillState.cards = cards;
           return;
@@ -2377,12 +2473,24 @@
       if (preflopDrillState.mode === "orbit") {
         preflopDrillState.sbScenario = null;
         preflopDrillState.sbVsOpener = null;
+        preflopDrillState.facingOpen = false;
+        preflopDrillState.facingOpenFrom = null;
         preflopDrillState.bbVsOpener = null;
         preflopDrillState.bbSqueezeScenario = false;
         preflopDrillState.bbSqueezeCaller = null;
         const p = DRILL_ORBIT_POSITIONS[preflopDrillState.orbitIndex];
         preflopDrillState.position = p;
-        if (p === "SB") {
+        if (p === "HJ" || p === "CO" || p === "BTN") {
+          preflopDrillState.facingOpen = Math.random() < (FACING_OPEN_PROB[p] || 0);
+          if (preflopDrillState.facingOpen) {
+            if (p === "HJ") preflopDrillState.facingOpenFrom = drillWeightedPickFromMap(["UTG"], HJ_FACING_OPEN_WEIGHTS);
+            if (p === "CO") preflopDrillState.facingOpenFrom = drillWeightedPickFromMap(["UTG", "HJ"], CO_FACING_OPEN_WEIGHTS);
+            if (p === "BTN") preflopDrillState.facingOpenFrom = drillWeightedPickFromMap(["UTG", "HJ", "CO"], BTN_FACING_OPEN_WEIGHTS);
+            preflopDrillState.orbitPillLabels[p] = `${p}*`;
+          } else {
+            preflopDrillState.orbitPillLabels[p] = p;
+          }
+        } else if (p === "SB") {
           preflopDrillState.sbScenario = Math.random() < 0.35 ? "rfi" : "facing_open";
           if (preflopDrillState.sbScenario === "facing_open") {
             preflopDrillState.sbVsOpener = drillWeightedPickFromMap(
@@ -2419,6 +2527,8 @@
         preflopDrillState.position = PREFLOP_DRILL_POSITIONS[Math.floor(Math.random() * PREFLOP_DRILL_POSITIONS.length)];
         preflopDrillState.sbScenario = null;
         preflopDrillState.sbVsOpener = null;
+        preflopDrillState.facingOpen = false;
+        preflopDrillState.facingOpenFrom = null;
         preflopDrillState.bbVsOpener = null;
         preflopDrillState.bbSqueezeScenario = false;
         preflopDrillState.bbSqueezeCaller = null;
@@ -2466,6 +2576,8 @@
       preflopDrillState.orbitPillLabels = drillEmptyOrbitPillLabels();
       preflopDrillState.sbScenario = null;
       preflopDrillState.sbVsOpener = null;
+      preflopDrillState.facingOpen = false;
+      preflopDrillState.facingOpenFrom = null;
       preflopDrillState.bbVsOpener = null;
       preflopDrillState.bbSqueezeScenario = false;
       preflopDrillState.bbSqueezeCaller = null;
@@ -2527,6 +2639,8 @@
       preflopDrillState.orbitCount = 1;
       preflopDrillState.sbScenario = null;
       preflopDrillState.sbVsOpener = null;
+      preflopDrillState.facingOpen = false;
+      preflopDrillState.facingOpenFrom = null;
       preflopDrillState.bbVsOpener = null;
       preflopDrillState.bbSqueezeScenario = false;
       preflopDrillState.bbSqueezeCaller = null;
@@ -2623,7 +2737,9 @@
         }
         el.drillBulletList.classList.remove("hidden");
         el.drillBulletList.innerHTML = "";
-        for (const line of pickDrillBullets(ev)) {
+        const lines = pickDrillBullets(ev).slice();
+        if (!wasCorrect && ev.mistakeLine) lines.push(ev.mistakeLine);
+        for (const line of lines) {
           const li = document.createElement("li");
           li.textContent = line;
           el.drillBulletList.appendChild(li);
@@ -2832,6 +2948,7 @@
 
     function renderDrillRangeBalanceHTML() {
       const order = ["UTG", "HJ", "CO", "BTN", "SB"];
+      const vsOpenOrder = ["HJ_vs_open", "CO_vs_open", "BTN_vs_open"];
       let rows = "";
       const eligible = [];
       for (const pos of order) {
@@ -2847,6 +2964,19 @@
         const tag = drillRangeBalanceClassify(actualPct, gto);
         eligible.push({ pos, actualPct, gto, diff: actualPct - gto });
         rows += `<div class="drill-bar-row drill-range-balance-row"><span>${pos}</span><span class="drill-range-balance-mid">You: ${actualPct}% &nbsp; GTO: ${gto}%</span><span class="drill-range-balance-tag ${tag.cls}">${tag.label}</span></div>`;
+      }
+      for (const pos of vsOpenOrder) {
+        const st = preflopDrillState.positionStats[pos];
+        const t = st.total;
+        const lbl = drillFormatStatsRowLabel(pos);
+        if (t < 3) {
+          rows += `<div class="drill-bar-row drill-range-balance-row"><span>${lbl}</span><span class="drill-range-balance-mid">—</span><span></span></div>`;
+          continue;
+        }
+        const threeBetPct = Math.round(((st.threeBet || 0) / t) * 100);
+        const gto3 = GTO_3BET_PCT[pos];
+        const tag = drillRangeBalanceClassify(threeBetPct, gto3);
+        rows += `<div class="drill-bar-row drill-range-balance-row"><span>${lbl}</span><span class="drill-range-balance-mid">You: ${threeBetPct}% 3-bet &nbsp; GTO: ${gto3}%</span><span class="drill-range-balance-tag ${tag.cls}">${tag.label}</span></div>`;
       }
       let summaryHtml = "";
       if (!eligible.length) {
@@ -2890,8 +3020,8 @@
           const cls = h.wasCorrect ? "ok" : "bad";
           const check = h.wasCorrect ? "✓" : "✗";
           const sk = h.spotKind || "rfi";
-          const userWord = h.userPick === "open" ? drillSpotKindOpenLabel(sk) : "FOLD";
-          const ansWord = h.correctAction === "open" ? drillSpotKindOpenLabel(sk) : "FOLD";
+          const userWord = drillActionLabel(h.userPick, sk);
+          const ansWord = drillActionLabel(h.correctAction, sk);
           return `<div class="drill-hand-history-row ${cls}"><span class="drill-hand-history-pos">${h.position}</span><span class="drill-hand-history-cards">${h.cardsCompact}</span><span>You: ${userWord}</span><span>Correct: ${ansWord} ${check}</span><span>${h.score}pts</span></div>`;
         })
         .join("");
@@ -2990,6 +3120,9 @@
 
     function drillStatsBucketForHand(pos) {
       if (preflopDrillState.mode !== "orbit") return pos;
+      if (preflopDrillState.facingOpen && pos === "HJ") return "HJ_vs_open";
+      if (preflopDrillState.facingOpen && pos === "CO") return "CO_vs_open";
+      if (preflopDrillState.facingOpen && pos === "BTN") return "BTN_vs_open";
       if (pos === "SB" && preflopDrillState.sbScenario === "facing_open") return "SB_3bet";
       if (pos === "BB" && preflopDrillState.bbSqueezeScenario) return "BB_squeeze";
       if (pos === "BB") return "BB";
@@ -2998,6 +3131,7 @@
 
     function drillHandSpotKind(pos) {
       if (preflopDrillState.mode !== "orbit") return "rfi";
+      if (preflopDrillState.facingOpen && (pos === "HJ" || pos === "CO" || pos === "BTN")) return "ip_vs_open";
       if (pos === "SB" && preflopDrillState.sbScenario === "facing_open") return "sb_3bet";
       if (pos === "SB") return "sb_rfi";
       if (pos === "BB" && preflopDrillState.bbSqueezeScenario) return "bb_squeeze";
@@ -3006,15 +3140,33 @@
     }
 
     function drillSpotKindOpenLabel(sk) {
+      if (sk === "ip_vs_open") return "3-BET";
       if (sk === "bb_defend") return "DEFEND";
       if (sk === "bb_squeeze") return "SQUEEZE";
       if (sk === "sb_3bet") return "3-BET";
       return "OPEN";
     }
 
-    function drillBuildOrbitRoundSummary(pos, correct, pick) {
+    function drillActionLabel(action, sk) {
+      if (action === "open") return drillSpotKindOpenLabel(sk);
+      if (action === "call") return "CALL";
+      return "FOLD";
+    }
+
+    function drillBuildOrbitRoundSummary(pos, correct, pick, expectedAction) {
       if (preflopDrillState.mode !== "orbit") return "";
       const open = pick === "open";
+      if (preflopDrillState.facingOpen && (pos === "HJ" || pos === "CO" || pos === "BTN")) {
+        const v = preflopDrillState.facingOpenFrom || "?";
+        if (correct) {
+          if (pick === "open") return `vs ${v} open → correct 3-bet`;
+          if (pick === "call") return `vs ${v} open → correct call`;
+          return `vs ${v} open → correct fold`;
+        }
+        if (expectedAction === "open") return `vs ${v} open → should have 3-bet`;
+        if (expectedAction === "call") return `vs ${v} open → should have called`;
+        return `vs ${v} open → should have folded`;
+      }
       if (pos === "SB" && preflopDrillState.sbScenario === "facing_open") {
         const v = preflopDrillState.sbVsOpener || "?";
         if (correct) return open ? `vs ${v} open → correct 3-bet` : `vs ${v} open → correct fold`;
@@ -3041,6 +3193,9 @@
     }
 
     function drillFormatStatsRowLabel(pos) {
+      if (pos === "HJ_vs_open") return "HJ (vs open)";
+      if (pos === "CO_vs_open") return "CO (vs open)";
+      if (pos === "BTN_vs_open") return "BTN (vs open)";
       if (pos === "SB_3bet") return "SB 3-bet";
       if (pos === "BB_squeeze") return "BB squeeze";
       return pos;
@@ -3065,8 +3220,14 @@
       const pos = preflopDrillState.position;
       let badgeText = `You are ${pos}`;
       let openBtnText = "OPEN";
+      let showCallBtn = false;
       let keyHint = "R = raise/open · F = fold · N or Space = next hand";
-      if (orbit && pos === "SB" && preflopDrillState.sbScenario === "rfi") {
+      if (orbit && preflopDrillState.facingOpen && (pos === "HJ" || pos === "CO" || pos === "BTN") && preflopDrillState.facingOpenFrom) {
+        badgeText = `[${preflopDrillState.facingOpenFrom}] has opened to 3bb — you are ${pos}, 3-bet, call, or fold?`;
+        openBtnText = "3-BET";
+        showCallBtn = true;
+        keyHint = "R = 3-bet · C = call · F = fold · N or Space = next hand";
+      } else if (orbit && pos === "SB" && preflopDrillState.sbScenario === "rfi") {
         badgeText = "Folded to you in SB — open or fold?";
         openBtnText = "OPEN";
         keyHint = "R = raise/open · F = fold · N or Space = next hand";
@@ -3093,6 +3254,10 @@
       }
       el.drillPositionBadge.textContent = badgeText;
       el.drillOpenBtn.textContent = openBtnText;
+      if (el.drillCallBtn) {
+        el.drillCallBtn.classList.toggle("hidden", !showCallBtn);
+        el.drillCallBtn.textContent = "CALL";
+      }
       if (el.drillKeyHint) el.drillKeyHint.textContent = keyHint;
       el.drillTableDiagram.innerHTML = renderDrillTableSvg(preflopDrillState.position);
       el.drillCardsRow.innerHTML = "";
@@ -3114,6 +3279,7 @@
       el.drillVerdictPanel.classList.toggle("hidden", !showVerdict);
       const lockChoice = showVerdict || preflopDrillState.answerLock;
       el.drillOpenBtn.disabled = lockChoice;
+      if (el.drillCallBtn) el.drillCallBtn.disabled = lockChoice;
       el.drillFoldBtn.disabled = lockChoice;
       if (!showVerdict) {
         el.drillVerdictTitle.textContent = "";
@@ -3137,12 +3303,36 @@
       if (state.tab !== "preflopDrill" || preflopDrillState.answered || preflopDrillState.answerLock) return;
       preflopDrillState.answerLock = true;
       el.drillOpenBtn.disabled = true;
+      if (el.drillCallBtn) el.drillCallBtn.disabled = true;
       el.drillFoldBtn.disabled = true;
       const ev = scorePLOHandForDrill(preflopDrillState.cards.slice(), preflopDrillState.position);
       preflopDrillState.lastEval = ev;
       preflopDrillState.userPick = pick;
       preflopDrillState.answered = true;
       const correct = pick === ev.action;
+      if (!correct && preflopDrillState.facingOpen && (preflopDrillState.position === "HJ" || preflopDrillState.position === "CO" || preflopDrillState.position === "BTN")) {
+        const p = preflopDrillState.position;
+        const o = preflopDrillState.facingOpenFrom;
+        const threePct = o && THREE_BET_FREQ[p] ? THREE_BET_FREQ[p][o] : null;
+        let mistake = "";
+        if (pick === "open" && ev.action === "call") {
+          mistake =
+            threePct != null
+              ? `✗ Strong hand but not in top ${threePct}% — calling is correct here, not 3-betting`
+              : "✗ Strong hand but not in top tier — calling is correct here, not 3-betting";
+        } else if (pick === "call" && ev.action === "open") {
+          mistake = "✗ This hand is strong enough to 3-bet — calling is too passive";
+        } else if (pick === "call" && ev.action === "fold") {
+          mistake = "✗ This hand doesn't have enough value to call — implied odds don't justify it in PLO";
+        } else if (pick === "fold" && ev.action === "call") {
+          mistake = "✗ Too tight — this hand has enough playability to call in position";
+        } else if (pick === "fold" && ev.action === "open") {
+          mistake = "✗ Way too tight — this is a 3-bet hand";
+        } else if (pick === "open" && ev.action === "fold") {
+          mistake = "✗ This hand is not strong enough to 3-bet here — folding is best";
+        }
+        if (mistake) ev.mistakeLine = mistake;
+      }
       preflopDrillState.total += 1;
       if (correct) {
         preflopDrillState.correct += 1;
@@ -3159,9 +3349,23 @@
         if (correct) {
           pst.correct += 1;
           if (pick === "open") pst.correctOpens += 1;
+          else if (pick === "call") pst.correctCalls += 1;
           else pst.correctFolds += 1;
         }
-        if (pick === "open") pst.opened += 1;
+        if (pick === "open") {
+          pst.opened += 1;
+          if (
+            statsBucket === "HJ_vs_open" ||
+            statsBucket === "CO_vs_open" ||
+            statsBucket === "BTN_vs_open" ||
+            statsBucket === "SB_3bet" ||
+            statsBucket === "BB_squeeze"
+          ) {
+            pst.threeBet += 1;
+          }
+        } else if (pick === "call") {
+          pst.called += 1;
+        }
         else pst.folded += 1;
       }
       const archKey = ev.archetype;
@@ -3187,7 +3391,7 @@
       };
       if (preflopDrillState.mode === "orbit") {
         preflopDrillState.orbitRoundResults[pos] = correct;
-        preflopDrillState.orbitRoundSummaries[pos] = drillBuildOrbitRoundSummary(pos, correct, pick);
+        preflopDrillState.orbitRoundSummaries[pos] = drillBuildOrbitRoundSummary(pos, correct, pick, ev.action);
       }
       preflopDrillState.handHistory.unshift(hist);
       if (preflopDrillState.handHistory.length > 10) preflopDrillState.handHistory.length = 10;
@@ -4815,6 +5019,9 @@
     });
 
     el.drillOpenBtn.addEventListener("click", () => submitDrillAnswer("open"));
+    if (el.drillCallBtn) {
+      el.drillCallBtn.addEventListener("click", () => submitDrillAnswer("call"));
+    }
     el.drillFoldBtn.addEventListener("click", () => submitDrillAnswer("fold"));
     el.drillNextBtn.addEventListener("click", () => {
       drillProceedNextHand();
@@ -4919,6 +5126,12 @@
         if (el.drillOpenBtn.disabled) return;
         flashDrillShortcut(el.drillOpenBtn);
         submitDrillAnswer("open");
+        return;
+      }
+      if (e.key.toLowerCase() === "c") {
+        if (!el.drillCallBtn || el.drillCallBtn.classList.contains("hidden") || el.drillCallBtn.disabled) return;
+        flashDrillShortcut(el.drillCallBtn);
+        submitDrillAnswer("call");
         return;
       }
       if (e.key.toLowerCase() === "f") {
