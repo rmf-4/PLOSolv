@@ -393,6 +393,67 @@
       width: 100%;
       box-sizing: border-box;
     }
+    .drill-mode-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+    }
+    button.drill-mode-pill {
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: #162721;
+      color: #d9ebe3;
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 0.74rem;
+      font-weight: 650;
+      cursor: pointer;
+    }
+    button.drill-mode-pill.active {
+      background: rgba(56, 211, 159, 0.2);
+      border-color: rgba(56, 211, 159, 0.5);
+      color: #e8f6ef;
+    }
+    .drill-orbit-progress {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      margin: 8px 0;
+      width: 100%;
+    }
+    .drill-orbit-progress.hidden {
+      display: none !important;
+    }
+    .drill-orbit-label {
+      font-size: 0.78rem;
+      font-weight: 650;
+      color: #aec1b8;
+      margin-right: 4px;
+    }
+    .drill-orbit-seg {
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(0, 0, 0, 0.35);
+      color: rgba(255, 255, 255, 0.45);
+    }
+    .drill-orbit-seg.done {
+      background: rgba(56, 211, 159, 0.28);
+      border-color: rgba(56, 211, 159, 0.45);
+      color: #e8f6ef;
+    }
+    .drill-orbit-seg.current {
+      background: transparent;
+      border: 2px solid #38d39f;
+      color: #e8f6ef;
+      font-weight: 800;
+      font-size: 0.82rem;
+      padding: 2px 9px;
+    }
     .drill-head-left {
       display: flex;
       flex-direction: column;
@@ -1219,6 +1280,11 @@
             <div class="drill-score-corner" id="drillRunningScore">0/0 correct</div>
           </div>
         </div>
+        <div class="drill-mode-row">
+          <button type="button" class="drill-mode-pill active" id="drillModeRandomBtn">Random</button>
+          <button type="button" class="drill-mode-pill" id="drillModeOrbitBtn">Orbit</button>
+        </div>
+        <div class="drill-orbit-progress hidden" id="drillOrbitProgress" aria-hidden="true"></div>
         <div class="drill-position-visual-row">
           <div class="drill-position-visual-side drill-position-visual-side--left">
             <div class="drill-position-badge" id="drillPositionBadge">You are CO</div>
@@ -1234,7 +1300,7 @@
           <button type="button" class="drill-big-btn drill-open" id="drillOpenBtn">OPEN</button>
           <button type="button" class="drill-big-btn drill-fold" id="drillFoldBtn">FOLD</button>
         </div>
-        <p class="drill-key-hint">R = raise/open · F = fold · N or Space = next hand</p>
+        <p class="drill-key-hint" id="drillKeyHint">R = raise/open · F = fold · N or Space = next hand</p>
         <div class="drill-verdict hidden" id="drillVerdictPanel">
           <div class="drill-verdict-title" id="drillVerdictTitle">CORRECT ✓</div>
           <div class="drill-hand-score" id="drillHandScoreLine">Hand Score: 0/100</div>
@@ -1248,6 +1314,14 @@
             <div id="drillSessionBody"></div>
             <p class="drill-session-motivate" id="drillSessionMotivate"></p>
             <button type="button" class="primary" id="drillSessionContinueBtn">Continue Drilling</button>
+          </div>
+        </div>
+        <div class="drill-session-overlay hidden" id="drillOrbitOverlay">
+          <div class="drill-session-card">
+            <h3 id="drillOrbitTitle">Orbit #1 Complete</h3>
+            <div id="drillOrbitBody"></div>
+            <p class="drill-session-motivate" id="drillOrbitCallout"></p>
+            <button type="button" class="primary" id="drillOrbitNextBtn">Start Next Orbit</button>
           </div>
         </div>
         <div class="drill-footer">
@@ -1337,7 +1411,18 @@
     };
 
     const PREFLOP_DRILL_POSITIONS = ["UTG", "HJ", "CO", "BTN", "SB"];
+    const DRILL_ORBIT_POSITIONS = ["UTG", "HJ", "CO", "BTN", "SB", "BB"];
+    const DRILL_STATS_POSITIONS = ["UTG", "HJ", "CO", "BTN", "SB", "BB"];
     const PREFLOP_OPEN_THRESHOLDS = { UTG: 62, HJ: 55, CO: 48, BTN: 38, SB: 33 };
+    const BB_DEFENSE_VS = { UTG: 14, HJ: 20, CO: 28, BTN: 50, SB: 40 };
+    const DRILL_ORBIT_WORST_HINT = {
+      UTG: "Toughest spot: UTG — review opening ranges from under the gun",
+      HJ: "Toughest spot: HJ — review hijack opening ranges",
+      CO: "Toughest spot: CO — review cutoff opening strategy",
+      BTN: "Toughest spot: BTN — review button opening ranges",
+      SB: "Toughest spot: SB — review opening ranges from the small blind",
+      BB: "Toughest spot: BB — review BB defense vs raises"
+    };
     const GTO_OPEN_PCT = { UTG: 17, HJ: 22, CO: 29, BTN: 48, SB: 55 };
     const EXPLOIT_MODEL = {
       tooWideCost: 0.18,
@@ -1351,8 +1436,13 @@
         HJ: { correct: 0, total: 0, opened: 0, folded: 0 },
         CO: { correct: 0, total: 0, opened: 0, folded: 0 },
         BTN: { correct: 0, total: 0, opened: 0, folded: 0 },
-        SB: { correct: 0, total: 0, opened: 0, folded: 0 }
+        SB: { correct: 0, total: 0, opened: 0, folded: 0 },
+        BB: { correct: 0, total: 0, opened: 0, folded: 0 }
       };
+    }
+
+    function drillEmptyOrbitRoundResults() {
+      return { UTG: null, HJ: null, CO: null, BTN: null, SB: null, BB: null };
     }
     function drillEmptyArchetypeStats() {
       return {
@@ -1379,7 +1469,12 @@
       handHistory: [],
       positionStats: drillEmptyPositionStats(),
       archetypeStats: drillEmptyArchetypeStats(),
-      exploitAnimRaf: null
+      exploitAnimRaf: null,
+      mode: "random",
+      orbitIndex: 0,
+      orbitCount: 1,
+      orbitRaiser: null,
+      orbitRoundResults: drillEmptyOrbitRoundResults()
     };
 
     const el = {
@@ -1450,7 +1545,16 @@
       drillBulletList: document.getElementById("drillBulletList"),
       drillVerdictHardLine: document.getElementById("drillVerdictHardLine"),
       drillNextBtn: document.getElementById("drillNextBtn"),
+      drillKeyHint: document.getElementById("drillKeyHint"),
       drillResetScoreBtn: document.getElementById("drillResetScoreBtn"),
+      drillModeRandomBtn: document.getElementById("drillModeRandomBtn"),
+      drillModeOrbitBtn: document.getElementById("drillModeOrbitBtn"),
+      drillOrbitProgress: document.getElementById("drillOrbitProgress"),
+      drillOrbitOverlay: document.getElementById("drillOrbitOverlay"),
+      drillOrbitTitle: document.getElementById("drillOrbitTitle"),
+      drillOrbitBody: document.getElementById("drillOrbitBody"),
+      drillOrbitCallout: document.getElementById("drillOrbitCallout"),
+      drillOrbitNextBtn: document.getElementById("drillOrbitNextBtn"),
       drillHardModeBtn: document.getElementById("drillHardModeBtn"),
       drillStreakBadge: document.getElementById("drillStreakBadge"),
       drillSessionOverlay: document.getElementById("drillSessionOverlay"),
@@ -2066,6 +2170,40 @@
       preflopDrillState.positionStats = drillEmptyPositionStats();
       preflopDrillState.archetypeStats = drillEmptyArchetypeStats();
       if (el.drillSessionOverlay) el.drillSessionOverlay.classList.add("hidden");
+      if (el.drillOrbitOverlay) el.drillOrbitOverlay.classList.add("hidden");
+      preflopDrillState.mode = "random";
+      preflopDrillState.orbitIndex = 0;
+      preflopDrillState.orbitCount = 1;
+      preflopDrillState.orbitRaiser = null;
+      preflopDrillState.orbitRoundResults = drillEmptyOrbitRoundResults();
+    }
+
+    function scorePLOHandForDrill(cards, position) {
+      if (preflopDrillState.mode === "orbit" && position === "BB" && preflopDrillState.orbitRaiser) {
+        const base = scorePLOHand(cards, "SB");
+        const r = preflopDrillState.orbitRaiser;
+        const bbTh = 100 - BB_DEFENSE_VS[r];
+        const action = base.score >= bbTh ? "open" : "fold";
+        const pct = BB_DEFENSE_VS[r];
+        const exLine = `📍 vs ${r} open, GTO BB defense is ~${pct}% of hands — this hand scored ${base.score}, which is a ${action === "open" ? "defend" : "fold"}`;
+        const reasons = base.reasons.filter((x) => typeof x !== "string" || !x.startsWith("📍"));
+        reasons.push(exLine);
+        const drillExplain = [];
+        for (const line of base.drillExplain || []) {
+          if (typeof line === "string" && line.startsWith("📍")) continue;
+          drillExplain.push(line);
+          if (drillExplain.length >= 2) break;
+        }
+        drillExplain.push(exLine);
+        return {
+          ...base,
+          action,
+          threshold: bbTh,
+          reasons,
+          drillExplain: drillExplain.slice(0, 3)
+        };
+      }
+      return scorePLOHand(cards, position);
     }
 
     function dealPreflopDrillHand() {
@@ -2077,12 +2215,117 @@
         deck[j] = t;
       }
       preflopDrillState.cards = [deck[0], deck[1], deck[2], deck[3]];
-      preflopDrillState.position = PREFLOP_DRILL_POSITIONS[Math.floor(Math.random() * PREFLOP_DRILL_POSITIONS.length)];
+      if (preflopDrillState.mode === "orbit") {
+        const p = DRILL_ORBIT_POSITIONS[preflopDrillState.orbitIndex];
+        preflopDrillState.position = p;
+        if (p === "BB") {
+          const completed = DRILL_ORBIT_POSITIONS.slice(0, preflopDrillState.orbitIndex).filter((x) => x !== "BB");
+          preflopDrillState.orbitRaiser =
+            completed[Math.floor(Math.random() * Math.max(1, completed.length))] || "UTG";
+        } else {
+          preflopDrillState.orbitRaiser = null;
+        }
+      } else {
+        preflopDrillState.position = PREFLOP_DRILL_POSITIONS[Math.floor(Math.random() * PREFLOP_DRILL_POSITIONS.length)];
+        preflopDrillState.orbitRaiser = null;
+      }
       preflopDrillState.answered = false;
       preflopDrillState.answerLock = false;
       preflopDrillState.userPick = null;
       preflopDrillState.lastEval = null;
       preflopDrillState.justDealt = true;
+    }
+
+    function drillProceedNextHand() {
+      if (!preflopDrillState.answered) return;
+      if (preflopDrillState.mode === "orbit" && preflopDrillState.position === "BB") {
+        showDrillOrbitCompleteOverlay();
+        return;
+      }
+      if (preflopDrillState.mode === "orbit") {
+        preflopDrillState.orbitIndex += 1;
+      }
+      dealPreflopDrillHand();
+      updatePreflopDrillPanel();
+    }
+
+    function drillDismissSessionOverlayContinue() {
+      if (el.drillSessionOverlay) el.drillSessionOverlay.classList.add("hidden");
+      if (preflopDrillState.mode === "orbit" && preflopDrillState.answered) {
+        if (preflopDrillState.position === "BB") {
+          showDrillOrbitCompleteOverlay();
+          return;
+        }
+        preflopDrillState.orbitIndex += 1;
+      }
+      dealPreflopDrillHand();
+      updatePreflopDrillPanel();
+    }
+
+    function startNextOrbitFromOverlay() {
+      if (el.drillOrbitOverlay) el.drillOrbitOverlay.classList.add("hidden");
+      preflopDrillState.orbitCount += 1;
+      preflopDrillState.orbitIndex = 0;
+      preflopDrillState.orbitRoundResults = drillEmptyOrbitRoundResults();
+      preflopDrillState.orbitRaiser = null;
+      dealPreflopDrillHand();
+      updatePreflopDrillPanel();
+    }
+
+    function showDrillOrbitCompleteOverlay() {
+      if (!el.drillOrbitOverlay || !el.drillOrbitTitle || !el.drillOrbitBody || !el.drillOrbitCallout) return;
+      const ord = DRILL_ORBIT_POSITIONS;
+      const parts = ord.map((p) => {
+        const ok = preflopDrillState.orbitRoundResults[p];
+        const sym = ok ? "✓" : "✗";
+        return `${p} ${sym}`;
+      });
+      const correctCount = ord.filter((p) => preflopDrillState.orbitRoundResults[p] === true).length;
+      const accPct = Math.round((correctCount / 6) * 100);
+      el.drillOrbitTitle.textContent = `Orbit #${preflopDrillState.orbitCount} Complete`;
+      el.drillOrbitBody.innerHTML = `<p>${parts.join(" · ")}</p><p>Accuracy for this orbit: <strong>${correctCount}/6 (${accPct}%)</strong></p>`;
+      let worst = null;
+      for (const p of ord) {
+        if (preflopDrillState.orbitRoundResults[p] === false) {
+          worst = p;
+          break;
+        }
+      }
+      el.drillOrbitCallout.textContent = worst
+        ? DRILL_ORBIT_WORST_HINT[worst] || `Toughest spot: ${worst}`
+        : "No misses this orbit — great work.";
+      el.drillOrbitOverlay.classList.remove("hidden");
+    }
+
+    function renderDrillOrbitProgressHTML() {
+      if (preflopDrillState.mode !== "orbit") return "";
+      const n = preflopDrillState.orbitCount;
+      const idx = preflopDrillState.orbitIndex;
+      const segs = DRILL_ORBIT_POSITIONS.map((p, i) => {
+        let cls = "drill-orbit-seg";
+        let label = p;
+        if (i < idx) {
+          cls += " done";
+          label = `${p} ✓`;
+        } else if (i === idx) {
+          cls += " current";
+          label = `${p} →`;
+        }
+        return `<span class="${cls}">${label}</span>`;
+      }).join("");
+      return `<span class="drill-orbit-label">Orbit #${n}:</span>${segs}`;
+    }
+
+    function setDrillMode(mode) {
+      preflopDrillState.mode = mode;
+      preflopDrillState.orbitIndex = 0;
+      preflopDrillState.orbitCount = 1;
+      preflopDrillState.orbitRaiser = null;
+      preflopDrillState.orbitRoundResults = drillEmptyOrbitRoundResults();
+      if (el.drillModeRandomBtn) el.drillModeRandomBtn.classList.toggle("active", mode === "random");
+      if (el.drillModeOrbitBtn) el.drillModeOrbitBtn.classList.toggle("active", mode === "orbit");
+      dealPreflopDrillHand();
+      updatePreflopDrillPanel();
     }
 
     function renderDrillTableSvg(pos) {
@@ -2095,17 +2338,34 @@
         { id: "SB", cx: 238, cy: 72, lx: 256, ly: 76, anchor: "end" },
         { id: "BB", cx: 202, cy: 136, lx: 202, ly: 158, anchor: "middle" }
       ];
+      const orbitOn = preflopDrillState.mode === "orbit";
+      const oi = preflopDrillState.orbitIndex;
       let circ = "";
       let lab = "";
+      let checks = "";
       for (const s of seats) {
-        const act = s.id === pos && s.id !== "BB";
-        const r = act ? 14 : 10;
-        const fl = act ? acc : "#2a4d42";
-        const fi = act ? "filter=\"url(#glow)\"" : "";
+        const oidx = DRILL_ORBIT_POSITIONS.indexOf(s.id);
+        let act = s.id === pos && (pos !== "BB" || orbitOn);
+        let r = act ? 14 : 10;
+        let fl = act ? acc : "#2a4d42";
+        let fi = act ? "filter=\"url(#glow)\"" : "";
+        if (orbitOn && oidx >= 0) {
+          if (oidx < oi) {
+            fl = "rgba(56,211,159,0.25)";
+            r = 10;
+            fi = "";
+            act = false;
+            checks += `<text x="${s.cx}" y="${s.cy}" text-anchor="middle" dominant-baseline="central" font-size="9" font-weight="700" fill="rgba(56,211,159,0.85)">✓</text>`;
+          } else if (oidx === oi) {
+            fl = act ? acc : "#2a4d42";
+            r = act ? 14 : 10;
+            fi = act ? "filter=\"url(#glow)\"" : "";
+          }
+        }
         circ += `<circle cx="${s.cx}" cy="${s.cy}" r="${r}" fill="${fl}" ${fi}/>`;
         lab += `<text x="${s.lx}" y="${s.ly}" text-anchor="${s.anchor}" font-size="11" font-family="inherit" font-weight="600" fill="${act ? "#ffffff" : "rgba(255,255,255,0.5)"}">${s.id}</text>`;
       }
-      return `<svg width="260" height="170" viewBox="0 0 260 170" xmlns="http://www.w3.org/2000/svg"><defs><filter id="glow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><ellipse cx="130" cy="85" rx="104" ry="66" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="3"/><ellipse cx="130" cy="85" rx="100" ry="62" fill="#1a4a38" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>${circ}${lab}</svg>`;
+      return `<svg width="260" height="170" viewBox="0 0 260 170" xmlns="http://www.w3.org/2000/svg"><defs><filter id="glow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><ellipse cx="130" cy="85" rx="104" ry="66" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="3"/><ellipse cx="130" cy="85" rx="100" ry="62" fill="#1a4a38" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>${circ}${checks}${lab}</svg>`;
     }
 
     function drillCardCompact(card) {
@@ -2325,7 +2585,7 @@
     }
 
     function renderDrillPositionBreakdownHTML() {
-      const order = ["UTG", "HJ", "CO", "BTN", "SB"];
+      const order = DRILL_STATS_POSITIONS;
       let html = renderDrillExploitabilityCardHTML();
       for (const pos of order) {
         const st = preflopDrillState.positionStats[pos];
@@ -2432,8 +2692,10 @@
         .map((h) => {
           const cls = h.wasCorrect ? "ok" : "bad";
           const check = h.wasCorrect ? "✓" : "✗";
-          const userWord = h.userPick === "open" ? "OPEN" : "FOLD";
-          const ansWord = h.correctAction === "open" ? "OPEN" : "FOLD";
+          const userWord =
+            h.userPick === "open" ? (h.isBBDefense ? "DEFEND" : "OPEN") : "FOLD";
+          const ansWord =
+            h.correctAction === "open" ? (h.isBBDefense ? "DEFEND" : "OPEN") : "FOLD";
           return `<div class="drill-hand-history-row ${cls}"><span class="drill-hand-history-pos">${h.position}</span><span class="drill-hand-history-cards">${h.cardsCompact}</span><span>You: ${userWord}</span><span>Correct: ${ansWord} ${check}</span><span>${h.score}pts</span></div>`;
         })
         .join("");
@@ -2478,7 +2740,7 @@
       const correctN = block.filter((h) => h.correct).length;
       const accPct = Math.round((correctN / block.length) * 100);
       const byPos = {};
-      for (const pos of PREFLOP_DRILL_POSITIONS) {
+      for (const pos of DRILL_STATS_POSITIONS) {
         byPos[pos] = { c: 0, t: 0 };
       }
       for (const h of block) {
@@ -2486,7 +2748,7 @@
         byPos[h.position].t += 1;
         if (h.correct) byPos[h.position].c += 1;
       }
-      const breakdown = PREFLOP_DRILL_POSITIONS.map((pos) => {
+      const breakdown = DRILL_STATS_POSITIONS.map((pos) => {
         const b = byPos[pos];
         return `${pos} ${b.c}/${b.t}`;
       }).join(" · ");
@@ -2494,7 +2756,7 @@
       let bestPct = -1;
       let worstPos = null;
       let worstPct = 101;
-      for (const pos of PREFLOP_DRILL_POSITIONS) {
+      for (const pos of DRILL_STATS_POSITIONS) {
         const b = byPos[pos];
         if (b.t < 1) continue;
         const p = (b.c / b.t) * 100;
@@ -2537,7 +2799,33 @@
       if (el.drillHardModeBtn) {
         el.drillHardModeBtn.classList.toggle("active", preflopDrillState.hardMode);
       }
-      el.drillPositionBadge.textContent = `You are ${preflopDrillState.position}`;
+      if (el.drillModeRandomBtn) el.drillModeRandomBtn.classList.toggle("active", preflopDrillState.mode === "random");
+      if (el.drillModeOrbitBtn) el.drillModeOrbitBtn.classList.toggle("active", preflopDrillState.mode === "orbit");
+      if (el.drillOrbitProgress) {
+        el.drillOrbitProgress.classList.toggle("hidden", preflopDrillState.mode !== "orbit");
+        if (preflopDrillState.mode === "orbit") {
+          el.drillOrbitProgress.innerHTML = renderDrillOrbitProgressHTML();
+        }
+      }
+      const isBBDef =
+        preflopDrillState.mode === "orbit" &&
+        preflopDrillState.position === "BB" &&
+        preflopDrillState.orbitRaiser;
+      if (isBBDef) {
+        el.drillPositionBadge.textContent = `You are BB — [${preflopDrillState.orbitRaiser}] has raised to 3bb. Defend or fold?`;
+      } else {
+        el.drillPositionBadge.textContent = `You are ${preflopDrillState.position}`;
+      }
+      el.drillOpenBtn.textContent = isBBDef ? "DEFEND" : "OPEN";
+      if (el.drillKeyHint) {
+        if (isBBDef) {
+          el.drillKeyHint.textContent = "R = DEFEND · F = fold · N or Space = next hand";
+        } else if (preflopDrillState.mode === "orbit") {
+          el.drillKeyHint.textContent = "R = raise/open · F = fold · N or Space = next hand";
+        } else {
+          el.drillKeyHint.textContent = "R = raise/open · F = fold · N or Space = next hand";
+        }
+      }
       el.drillTableDiagram.innerHTML = renderDrillTableSvg(preflopDrillState.position);
       el.drillCardsRow.innerHTML = "";
       const runDealAnim = preflopDrillState.justDealt;
@@ -2582,7 +2870,7 @@
       preflopDrillState.answerLock = true;
       el.drillOpenBtn.disabled = true;
       el.drillFoldBtn.disabled = true;
-      const ev = scorePLOHand(preflopDrillState.cards.slice(), preflopDrillState.position);
+      const ev = scorePLOHandForDrill(preflopDrillState.cards.slice(), preflopDrillState.position);
       preflopDrillState.lastEval = ev;
       preflopDrillState.userPick = pick;
       preflopDrillState.answered = true;
@@ -2620,8 +2908,12 @@
         userPick: pick,
         correctAction: ev.action,
         score: ev.score,
-        wasCorrect: correct
+        wasCorrect: correct,
+        isBBDefense: pos === "BB" && preflopDrillState.mode === "orbit"
       };
+      if (preflopDrillState.mode === "orbit") {
+        preflopDrillState.orbitRoundResults[pos] = correct;
+      }
       preflopDrillState.handHistory.unshift(hist);
       if (preflopDrillState.handHistory.length > 10) preflopDrillState.handHistory.length = 10;
       updatePreflopDrillPanel();
@@ -4250,15 +4542,29 @@
     el.drillOpenBtn.addEventListener("click", () => submitDrillAnswer("open"));
     el.drillFoldBtn.addEventListener("click", () => submitDrillAnswer("fold"));
     el.drillNextBtn.addEventListener("click", () => {
-      dealPreflopDrillHand();
-      updatePreflopDrillPanel();
+      drillProceedNextHand();
     });
 
     if (el.drillSessionContinueBtn) {
       el.drillSessionContinueBtn.addEventListener("click", () => {
-        if (el.drillSessionOverlay) el.drillSessionOverlay.classList.add("hidden");
-        dealPreflopDrillHand();
-        updatePreflopDrillPanel();
+        drillDismissSessionOverlayContinue();
+      });
+    }
+
+    if (el.drillOrbitNextBtn) {
+      el.drillOrbitNextBtn.addEventListener("click", () => {
+        startNextOrbitFromOverlay();
+      });
+    }
+
+    if (el.drillModeRandomBtn) {
+      el.drillModeRandomBtn.addEventListener("click", () => {
+        if (preflopDrillState.mode !== "random") setDrillMode("random");
+      });
+    }
+    if (el.drillModeOrbitBtn) {
+      el.drillModeOrbitBtn.addEventListener("click", () => {
+        if (preflopDrillState.mode !== "orbit") setDrillMode("orbit");
       });
     }
 
@@ -4304,18 +4610,24 @@
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
       if (e.repeat) return;
 
+      const orbitOverlayShowing =
+        el.drillOrbitOverlay && !el.drillOrbitOverlay.classList.contains("hidden");
       const sessionOverlayShowing =
         el.drillSessionOverlay && !el.drillSessionOverlay.classList.contains("hidden");
 
-      if (e.key === " " && sessionOverlayShowing) {
+      if (e.key === " " && orbitOverlayShowing) {
         e.preventDefault();
-        if (el.drillSessionOverlay) el.drillSessionOverlay.classList.add("hidden");
-        dealPreflopDrillHand();
-        updatePreflopDrillPanel();
+        startNextOrbitFromOverlay();
         return;
       }
 
-      if (sessionOverlayShowing) return;
+      if (e.key === " " && sessionOverlayShowing) {
+        e.preventDefault();
+        drillDismissSessionOverlayContinue();
+        return;
+      }
+
+      if (orbitOverlayShowing || sessionOverlayShowing) return;
 
       const verdictShowing = !el.drillVerdictPanel.classList.contains("hidden");
       const nextAvailable = verdictShowing && !el.drillNextBtn.disabled;
@@ -4324,8 +4636,7 @@
         if (!nextAvailable) return;
         if (e.key === " ") e.preventDefault();
         flashDrillShortcut(el.drillNextBtn);
-        dealPreflopDrillHand();
-        updatePreflopDrillPanel();
+        drillProceedNextHand();
         return;
       }
 
