@@ -537,6 +537,33 @@
       font-size: 0.76rem;
       color: #c8ddd4;
     }
+    .drill-bar-row.drill-range-balance-row {
+      grid-template-columns: 38px minmax(0, 1fr) minmax(108px, auto);
+    }
+    .drill-range-balance-mid {
+      color: #c8ddd4;
+      min-width: 0;
+    }
+    .drill-range-balance-tag {
+      text-align: right;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+    .drill-balance-ok {
+      color: #38d39f;
+    }
+    .drill-balance-warn {
+      color: #ffb432;
+    }
+    .drill-balance-bad {
+      color: #ff6b6b;
+    }
+    .drill-range-balance-summary {
+      font-size: 0.74rem;
+      line-height: 1.45;
+      color: #c8ddd4;
+      margin: 10px 0 0;
+    }
     .drill-bar-track {
       height: 10px;
       background: rgba(255, 255, 255, 0.08);
@@ -1220,15 +1247,16 @@
 
     const PREFLOP_DRILL_POSITIONS = ["UTG", "HJ", "CO", "BTN", "SB"];
     const PREFLOP_OPEN_THRESHOLDS = { UTG: 62, HJ: 55, CO: 48, BTN: 38, SB: 33 };
+    const GTO_OPEN_PCT = { UTG: 17, HJ: 22, CO: 29, BTN: 48, SB: 55 };
 
     let preflopDrillPrevTab = null;
     function drillEmptyPositionStats() {
       return {
-        UTG: { correct: 0, total: 0 },
-        HJ: { correct: 0, total: 0 },
-        CO: { correct: 0, total: 0 },
-        BTN: { correct: 0, total: 0 },
-        SB: { correct: 0, total: 0 }
+        UTG: { correct: 0, total: 0, opened: 0, folded: 0 },
+        HJ: { correct: 0, total: 0, opened: 0, folded: 0 },
+        CO: { correct: 0, total: 0, opened: 0, folded: 0 },
+        BTN: { correct: 0, total: 0, opened: 0, folded: 0 },
+        SB: { correct: 0, total: 0, opened: 0, folded: 0 }
       };
     }
     function drillEmptyArchetypeStats() {
@@ -2085,7 +2113,68 @@
       if (!anyArch) {
         html += `<p style="font-size:0.74rem;color:#8a9e95;margin:0">Play hands to see archetype stats.</p>`;
       }
+      html += `<div class="drill-subhead">Range Balance</div>`;
+      html += renderDrillRangeBalanceHTML();
       return html;
+    }
+
+    function drillRangeBalanceClassify(actualPct, gtoPct) {
+      const diff = actualPct - gtoPct;
+      if (Math.abs(diff) <= 5) return { label: "✓ ON TARGET", cls: "drill-balance-ok" };
+      if (diff >= 12) return { label: "▲▲ TOO WIDE", cls: "drill-balance-bad" };
+      if (diff > 5) return { label: "▲ SLIGHTLY WIDE", cls: "drill-balance-warn" };
+      if (diff <= -12) return { label: "▼▼ TOO TIGHT", cls: "drill-balance-bad" };
+      return { label: "▼ SLIGHTLY TIGHT", cls: "drill-balance-warn" };
+    }
+
+    function renderDrillRangeBalanceHTML() {
+      const order = ["UTG", "HJ", "CO", "BTN", "SB"];
+      let rows = "";
+      const eligible = [];
+      for (const pos of order) {
+        const st = preflopDrillState.positionStats[pos];
+        const t = st.total;
+        if (t < 3) {
+          rows += `<div class="drill-bar-row drill-range-balance-row"><span>${pos}</span><span class="drill-range-balance-mid">—</span><span></span></div>`;
+          continue;
+        }
+        const opened = st.opened || 0;
+        const actualPct = Math.round((opened / t) * 100);
+        const gto = GTO_OPEN_PCT[pos];
+        const tag = drillRangeBalanceClassify(actualPct, gto);
+        eligible.push({ pos, actualPct, gto, diff: actualPct - gto });
+        rows += `<div class="drill-bar-row drill-range-balance-row"><span>${pos}</span><span class="drill-range-balance-mid">You: ${actualPct}% &nbsp; GTO: ${gto}%</span><span class="drill-range-balance-tag ${tag.cls}">${tag.label}</span></div>`;
+      }
+      let summaryHtml = "";
+      if (!eligible.length) {
+        summaryHtml =
+          '<p class="drill-range-balance-summary">Play at least 3 hands from a seat to compare your open frequency to GTO.</p>';
+      } else {
+        const allOnTarget = eligible.every((e) => Math.abs(e.diff) <= 5);
+        const wide = PREFLOP_DRILL_POSITIONS.filter((pos) => {
+          const st = preflopDrillState.positionStats[pos];
+          if (st.total < 3) return false;
+          const actualPct = Math.round(((st.opened || 0) / st.total) * 100);
+          return actualPct - GTO_OPEN_PCT[pos] > 5;
+        });
+        const tight = PREFLOP_DRILL_POSITIONS.filter((pos) => {
+          const st = preflopDrillState.positionStats[pos];
+          if (st.total < 3) return false;
+          const actualPct = Math.round(((st.opened || 0) / st.total) * 100);
+          return actualPct - GTO_OPEN_PCT[pos] < -5;
+        });
+        if (allOnTarget) {
+          summaryHtml = '<p class="drill-range-balance-summary">✓ Your ranges look balanced</p>';
+        } else {
+          if (wide.length) {
+            summaryHtml += `<p class="drill-range-balance-summary">⚠ You're opening too wide from ${wide.join(", ")} — a GTO opponent would 3-bet you aggressively</p>`;
+          }
+          if (tight.length) {
+            summaryHtml += `<p class="drill-range-balance-summary">⚠ You're folding too much from ${tight.join(", ")} — you're giving up dead money</p>`;
+          }
+        }
+      }
+      return rows + summaryHtml;
     }
 
     function renderDrillHandHistoryHTML() {
@@ -2264,6 +2353,8 @@
       if (pst) {
         pst.total += 1;
         if (correct) pst.correct += 1;
+        if (pick === "open") pst.opened += 1;
+        else pst.folded += 1;
       }
       const archKey = ev.archetype;
       if (archKey && preflopDrillState.archetypeStats[archKey] != null) {
