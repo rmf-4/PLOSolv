@@ -2329,7 +2329,25 @@
       return scorePLOHand(cards, position);
     }
 
-    function dealPreflopDrillHand() {
+    const DRILL_DEAL_MARGIN = 12;
+    const DRILL_DEAL_TARGET = { open: 0.35, fold: 0.35, marginal: 0.3 };
+
+    function drillClassifyDealBucket(score, threshold, margin) {
+      const isOpen = score >= threshold + margin;
+      const isFold = score < threshold - margin;
+      if (isOpen) return "open";
+      if (isFold) return "fold";
+      return "marginal";
+    }
+
+    function drillPickWeightedDealBucket() {
+      const r = Math.random();
+      if (r < DRILL_DEAL_TARGET.open) return "open";
+      if (r < DRILL_DEAL_TARGET.open + DRILL_DEAL_TARGET.fold) return "fold";
+      return "marginal";
+    }
+
+    function drillDealFourCardsFisherYates() {
       const deck = fullDeck();
       for (let i = deck.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -2337,7 +2355,25 @@
         deck[i] = deck[j];
         deck[j] = t;
       }
-      preflopDrillState.cards = [deck[0], deck[1], deck[2], deck[3]];
+      return [deck[0], deck[1], deck[2], deck[3]];
+    }
+
+    function drillAssignWeightedPreflopCards() {
+      const position = preflopDrillState.position;
+      const bucket = drillPickWeightedDealBucket();
+      for (let attempts = 0; attempts < 100; attempts++) {
+        const cards = drillDealFourCardsFisherYates();
+        const ev = scorePLOHandForDrill(cards.slice(), position);
+        const cat = drillClassifyDealBucket(ev.score, ev.threshold, DRILL_DEAL_MARGIN);
+        if (cat === bucket) {
+          preflopDrillState.cards = cards;
+          return;
+        }
+      }
+      preflopDrillState.cards = drillDealFourCardsFisherYates();
+    }
+
+    function dealPreflopDrillHand() {
       if (preflopDrillState.mode === "orbit") {
         preflopDrillState.sbScenario = null;
         preflopDrillState.sbVsOpener = null;
@@ -2387,6 +2423,7 @@
         preflopDrillState.bbSqueezeScenario = false;
         preflopDrillState.bbSqueezeCaller = null;
       }
+      drillAssignWeightedPreflopCards();
       preflopDrillState.answered = false;
       preflopDrillState.answerLock = false;
       preflopDrillState.userPick = null;
