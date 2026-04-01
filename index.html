@@ -375,50 +375,54 @@
       gap: 16px;
     }
     .drill-score-corner {
-      position: absolute;
-      top: 6px;
-      right: 10px;
-      font-size: 0.78rem;
+      font-size: 0.72rem;
       font-weight: 650;
       color: #c8ddd4;
       background: rgba(0, 0, 0, 0.35);
       border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: 8px;
-      padding: 5px 9px;
+      padding: 4px 8px;
+      white-space: nowrap;
     }
     .drill-head {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
-      gap: 10px 14px;
+      gap: 8px 12px;
       width: 100%;
       box-sizing: border-box;
+    }
+    .drill-head-left {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 6px;
+      min-width: 0;
+      flex: 1 1 120px;
     }
     .drill-head h2 {
       margin: 0;
       font-size: 0.96rem;
-    }
-    .drill-head-actions {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 8px;
+      line-height: 1.2;
     }
     .drill-score-cluster {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      gap: 8px;
+      justify-content: flex-end;
+      gap: 6px;
+      flex: 0 1 auto;
+      margin-left: auto;
     }
     .drill-streak-badge {
-      font-size: 0.78rem;
+      font-size: 0.72rem;
       font-weight: 650;
       color: #ffb432;
       background: rgba(255, 180, 50, 0.18);
       border: 1px solid rgba(255, 180, 50, 0.35);
       border-radius: 8px;
-      padding: 5px 9px;
+      padding: 4px 8px;
       white-space: nowrap;
     }
     .drill-streak-badge.hidden {
@@ -440,11 +444,12 @@
       border: 1px solid rgba(255, 255, 255, 0.14);
       background: #162721;
       color: #d9ebe3;
-      padding: 5px 11px;
+      padding: 4px 9px;
       border-radius: 8px;
-      font-size: 0.78rem;
+      font-size: 0.72rem;
       font-weight: 650;
       cursor: pointer;
+      flex-shrink: 0;
     }
     button.drill-hard-mode-btn.active {
       background: rgba(56, 211, 159, 0.22);
@@ -1085,13 +1090,15 @@
     <div class="table hidden" id="preflopDrillPanel">
       <div class="drill-wrap">
         <div class="drill-head">
-          <h2>Preflop Drill</h2>
-          <div class="drill-head-actions">
-            <button type="button" class="drill-hard-mode-btn" id="drillHardModeBtn">Hard Mode</button>
-            <div class="drill-score-cluster">
-              <span class="drill-streak-badge hidden" id="drillStreakBadge" aria-live="polite"></span>
-              <div class="drill-score-corner" id="drillRunningScore">0/0 correct</div>
-            </div>
+          <div class="drill-head-left">
+            <h2>Preflop Drill</h2>
+            <button type="button" class="drill-hard-mode-btn" id="drillHardModeBtn" title="Hard mode: minimal feedback after each hand">
+              Hard mode
+            </button>
+          </div>
+          <div class="drill-score-cluster">
+            <span class="drill-streak-badge hidden" id="drillStreakBadge" aria-live="polite"></span>
+            <div class="drill-score-corner" id="drillRunningScore">0/0 correct</div>
           </div>
         </div>
         <div class="drill-position-visual-row">
