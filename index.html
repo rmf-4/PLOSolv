@@ -564,6 +564,97 @@
       color: #c8ddd4;
       margin: 10px 0 0;
     }
+    .drill-exploit-card {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 12px;
+      padding: 12px 14px;
+      margin-bottom: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-left-width: 4px;
+      border-left-color: #38d39f;
+    }
+    .drill-exploit-card.drill-exploit-tier-teal {
+      border-left-color: #38d39f;
+    }
+    .drill-exploit-card.drill-exploit-tier-amber {
+      border-left-color: #ffb432;
+    }
+    .drill-exploit-card.drill-exploit-tier-red {
+      border-left-color: #ff6b6b;
+    }
+    .drill-exploit-card-title {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: #aec1b8;
+      margin: 0 0 8px;
+    }
+    .drill-exploit-card-value {
+      font-size: 1.6rem;
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+    }
+    .drill-exploit-card-unit {
+      font-size: 0.72rem;
+      color: #aec1b8;
+      margin-top: 4px;
+    }
+    .drill-exploit-card-tier-label {
+      font-size: 0.76rem;
+      font-weight: 650;
+      margin-top: 6px;
+    }
+    .drill-exploit-tier-teal .drill-exploit-card-value,
+    .drill-exploit-tier-teal .drill-exploit-card-tier-label {
+      color: #38d39f;
+    }
+    .drill-exploit-tier-amber .drill-exploit-card-value,
+    .drill-exploit-tier-amber .drill-exploit-card-tier-label {
+      color: #ffb432;
+    }
+    .drill-exploit-tier-red .drill-exploit-card-value,
+    .drill-exploit-tier-red .drill-exploit-card-tier-label {
+      color: #ff6b6b;
+    }
+    .drill-exploit-card-breakdown {
+      margin-top: 12px;
+      font-size: 0.72rem;
+      line-height: 1.55;
+      color: #c8ddd4;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .drill-exploit-card-breakdown div {
+      margin-bottom: 3px;
+    }
+    .drill-exploit-card-verdict {
+      margin-top: 10px;
+      font-size: 0.76rem;
+      line-height: 1.45;
+      color: #d0e3da;
+    }
+    .drill-exploit-disclaimer {
+      font-size: 0.62rem;
+      color: rgba(255, 255, 255, 0.35);
+      margin: 0 0 12px;
+      font-style: italic;
+      line-height: 1.4;
+    }
+    .drill-exploit-card-locked {
+      border-left-color: rgba(255, 255, 255, 0.22);
+    }
+    .drill-exploit-card-locked p {
+      margin: 6px 0 0;
+      font-size: 0.76rem;
+      line-height: 1.45;
+    }
+    .drill-exploit-card-locked .drill-exploit-locked-hint {
+      color: #8a9e95;
+    }
+    .drill-exploit-card-locked .drill-exploit-card-progress {
+      font-size: 0.72rem;
+      color: rgba(255, 255, 255, 0.4);
+      margin-top: 8px;
+    }
     .drill-bar-track {
       height: 10px;
       background: rgba(255, 255, 255, 0.08);
@@ -1248,6 +1339,10 @@
     const PREFLOP_DRILL_POSITIONS = ["UTG", "HJ", "CO", "BTN", "SB"];
     const PREFLOP_OPEN_THRESHOLDS = { UTG: 62, HJ: 55, CO: 48, BTN: 38, SB: 33 };
     const GTO_OPEN_PCT = { UTG: 17, HJ: 22, CO: 29, BTN: 48, SB: 55 };
+    const EXPLOIT_MODEL = {
+      tooWideCost: 0.18,
+      tooTightCost: 0.12
+    };
 
     let preflopDrillPrevTab = null;
     function drillEmptyPositionStats() {
@@ -1283,7 +1378,8 @@
       currentBlockHands: [],
       handHistory: [],
       positionStats: drillEmptyPositionStats(),
-      archetypeStats: drillEmptyArchetypeStats()
+      archetypeStats: drillEmptyArchetypeStats(),
+      exploitAnimRaf: null
     };
 
     const el = {
@@ -1961,6 +2057,7 @@
     }
 
     function resetPreflopDrillRunningScore() {
+      cancelDrillExploitAnimation();
       preflopDrillState.correct = 0;
       preflopDrillState.total = 0;
       preflopDrillState.streak = 0;
@@ -2078,9 +2175,158 @@
       });
     }
 
+    function cancelDrillExploitAnimation() {
+      if (preflopDrillState.exploitAnimRaf != null) {
+        cancelAnimationFrame(preflopDrillState.exploitAnimRaf);
+        preflopDrillState.exploitAnimRaf = null;
+      }
+    }
+
+    function getDrillExploitabilitySnapshot() {
+      const minHands = 3;
+      const minPositions = 3;
+      let positionsReady = 0;
+      const details = [];
+      for (const pos of PREFLOP_DRILL_POSITIONS) {
+        const st = preflopDrillState.positionStats[pos];
+        if (st.total < minHands) continue;
+        positionsReady += 1;
+        const actualPct = Math.round(((st.opened || 0) / st.total) * 100);
+        const gto = GTO_OPEN_PCT[pos];
+        const diff = actualPct - gto;
+        if (Math.abs(diff) <= 5) {
+          details.push({
+            pos,
+            diff,
+            actualPct,
+            gto,
+            leak: 0,
+            wide: null,
+            line: `${pos}  ✓ on target →  0.0bb/100`
+          });
+        } else if (diff > 0) {
+          const leak = diff * EXPLOIT_MODEL.tooWideCost;
+          details.push({
+            pos,
+            diff,
+            actualPct,
+            gto,
+            leak,
+            wide: true,
+            line: `${pos}  +${diff}% wide  →  est. -${leak.toFixed(1)}bb/100`
+          });
+        } else {
+          const leak = Math.abs(diff) * EXPLOIT_MODEL.tooTightCost;
+          details.push({
+            pos,
+            diff,
+            actualPct,
+            gto,
+            leak,
+            wide: false,
+            line: `${pos}  ${diff}% tight  →  est. -${leak.toFixed(1)}bb/100`
+          });
+        }
+      }
+      const totalLeakBB = details.reduce((s, d) => s + d.leak, 0);
+      let tier;
+      let tierLabel;
+      if (totalLeakBB < 1.0) {
+        tier = "teal";
+        tierLabel = "Near unexploitable";
+      } else if (totalLeakBB <= 2.5) {
+        tier = "amber";
+        tierLabel = "Exploitable";
+      } else {
+        tier = "red";
+        tierLabel = "Highly exploitable";
+      }
+      const unlocked = positionsReady >= minPositions;
+      let verdict = "";
+      if (unlocked) {
+        const offenders = details.filter((d) => d.leak > 0);
+        if (!offenders.length) {
+          verdict =
+            "Your ranges are balanced across all positions — a GTO opponent has no clear angle to exploit";
+        } else {
+          let worst = offenders[0];
+          for (let i = 1; i < offenders.length; i++) {
+            if (offenders[i].leak > worst.leak) worst = offenders[i];
+          }
+          if (worst.wide) {
+            verdict = `A GTO opponent would 3-bet your ${worst.pos} range aggressively — you're opening ${worst.actualPct}% vs the ${worst.gto}% target, folding out too much equity`;
+          } else {
+            verdict = `You're surrendering dead money from ${worst.pos} — opening only ${worst.actualPct}% vs ${worst.gto}% target gives opponents a free steal`;
+          }
+        }
+      }
+      return {
+        positionsReady,
+        unlocked,
+        totalLeakBB,
+        tier,
+        tierLabel,
+        details,
+        verdict
+      };
+    }
+
+    function renderDrillExploitabilityCardHTML() {
+      const snap = getDrillExploitabilitySnapshot();
+      const disc =
+        '<p class="drill-exploit-disclaimer">* EV estimates are simplified heuristics based on open frequency deviation, not a full CFR solve</p>';
+      if (!snap.unlocked) {
+        return (
+          `<div class="drill-exploit-card drill-exploit-card-locked"><div class="drill-exploit-card-title">Exploitability Score</div>` +
+          `<p class="drill-exploit-locked-hint">Keep drilling — exploitability score unlocks after enough hands per position</p>` +
+          `<p class="drill-exploit-card-progress">3 positions needed · ${snap.positionsReady} ready</p></div>${disc}`
+        );
+      }
+      const breakdown = snap.details.map((d) => `<div>${d.line}</div>`).join("");
+      const tierCls = `drill-exploit-tier-${snap.tier}`;
+      return (
+        `<div class="drill-exploit-card ${tierCls}"><div class="drill-exploit-card-title">Exploitability Score</div>` +
+        `<div id="drillExploitScoreValue" class="drill-exploit-card-value" data-target="${snap.totalLeakBB}">0.0</div>` +
+        `<div class="drill-exploit-card-unit">bb / 100 hands</div>` +
+        `<div class="drill-exploit-card-tier-label">${snap.tierLabel}</div>` +
+        `<div class="drill-exploit-card-breakdown">${breakdown}</div>` +
+        `<div class="drill-exploit-card-verdict">${snap.verdict}</div></div>${disc}`
+      );
+    }
+
+    function startDrillExploitScoreAnimation() {
+      cancelDrillExploitAnimation();
+      const valEl = document.getElementById("drillExploitScoreValue");
+      if (!valEl) return;
+      const target = Number(valEl.getAttribute("data-target")) || 0;
+      const duration = 600;
+      const t0 = performance.now();
+      function frame(now) {
+        const elapsed = now - t0;
+        const u = Math.min(1, elapsed / duration);
+        const cur = target * u;
+        if (target <= 0) valEl.textContent = "0.0";
+        else valEl.textContent = `−${cur.toFixed(1)}`;
+        if (u < 1) {
+          preflopDrillState.exploitAnimRaf = requestAnimationFrame(frame);
+        } else {
+          preflopDrillState.exploitAnimRaf = null;
+          if (target <= 0) valEl.textContent = "0.0";
+          else valEl.textContent = `−${target.toFixed(1)}`;
+        }
+      }
+      valEl.textContent = target <= 0 ? "0.0" : "−0.0";
+      preflopDrillState.exploitAnimRaf = requestAnimationFrame(frame);
+    }
+
+    function scheduleDrillExploitScoreAnimation() {
+      if (!el.drillPosBreakdownBody || el.drillPosBreakdownBody.classList.contains("collapsed")) return;
+      requestAnimationFrame(() => startDrillExploitScoreAnimation());
+    }
+
     function renderDrillPositionBreakdownHTML() {
       const order = ["UTG", "HJ", "CO", "BTN", "SB"];
-      let html = "";
+      let html = renderDrillExploitabilityCardHTML();
       for (const pos of order) {
         const st = preflopDrillState.positionStats[pos];
         const t = st.total;
@@ -2198,6 +2444,7 @@
         el.drillPosBreakdownInner.innerHTML = renderDrillPositionBreakdownHTML();
         if (el.drillPosBreakdownBody && !el.drillPosBreakdownBody.classList.contains("collapsed")) {
           animateDrillBars(el.drillPosBreakdownInner);
+          scheduleDrillExploitScoreAnimation();
         }
       }
       if (el.drillHandHistoryInner) {
@@ -4036,6 +4283,7 @@
         btn.textContent = `${arrow} ${labelText}`;
         if (expanded && body === el.drillPosBreakdownBody && el.drillPosBreakdownInner) {
           animateDrillBars(el.drillPosBreakdownInner);
+          scheduleDrillExploitScoreAnimation();
         }
       });
     }
