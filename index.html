@@ -656,6 +656,9 @@
     .drill-exploit-card.drill-exploit-tier-red {
       border-left-color: #ff6b6b;
     }
+    .drill-exploit-card.drill-exploit-tier-marginal {
+      border-left-color: #7bc9a4;
+    }
     .drill-exploit-card-title {
       font-size: 0.78rem;
       font-weight: 700;
@@ -681,6 +684,10 @@
     .drill-exploit-tier-teal .drill-exploit-card-value,
     .drill-exploit-tier-teal .drill-exploit-card-tier-label {
       color: #38d39f;
+    }
+    .drill-exploit-tier-marginal .drill-exploit-card-value,
+    .drill-exploit-tier-marginal .drill-exploit-card-tier-label {
+      color: #8fd4b8;
     }
     .drill-exploit-tier-amber .drill-exploit-card-value,
     .drill-exploit-tier-amber .drill-exploit-card-tier-label {
@@ -1445,18 +1452,27 @@
       tooWideCost: 0.18,
       tooTightCost: 0.12
     };
+    const MIN_HANDS_FOR_EXPLOIT = 10;
 
     let preflopDrillPrevTab = null;
     function drillEmptyPositionStats() {
+      const row = () => ({
+        correct: 0,
+        total: 0,
+        opened: 0,
+        folded: 0,
+        correctOpens: 0,
+        correctFolds: 0
+      });
       return {
-        UTG: { correct: 0, total: 0, opened: 0, folded: 0 },
-        HJ: { correct: 0, total: 0, opened: 0, folded: 0 },
-        CO: { correct: 0, total: 0, opened: 0, folded: 0 },
-        BTN: { correct: 0, total: 0, opened: 0, folded: 0 },
-        SB: { correct: 0, total: 0, opened: 0, folded: 0 },
-        SB_3bet: { correct: 0, total: 0, opened: 0, folded: 0 },
-        BB: { correct: 0, total: 0, opened: 0, folded: 0 },
-        BB_squeeze: { correct: 0, total: 0, opened: 0, folded: 0 }
+        UTG: row(),
+        HJ: row(),
+        CO: row(),
+        BTN: row(),
+        SB: row(),
+        SB_3bet: row(),
+        BB: row(),
+        BB_squeeze: row()
       };
     }
 
@@ -2601,58 +2617,45 @@
     }
 
     function getDrillExploitabilitySnapshot() {
-      const minHands = 3;
       const minPositions = 3;
       let positionsReady = 0;
       const details = [];
       for (const pos of PREFLOP_DRILL_POSITIONS) {
         const st = preflopDrillState.positionStats[pos];
-        if (st.total < minHands) continue;
+        if (st.total < MIN_HANDS_FOR_EXPLOIT) continue;
         positionsReady += 1;
+        const accuracy = st.total > 0 ? st.correct / st.total : 0;
         const actualPct = Math.round(((st.opened || 0) / st.total) * 100);
         const gto = GTO_OPEN_PCT[pos];
         const diff = actualPct - gto;
+        let leak = 0;
+        let wide = null;
+        let line = "";
         if (Math.abs(diff) <= 5) {
-          details.push({
-            pos,
-            diff,
-            actualPct,
-            gto,
-            leak: 0,
-            wide: null,
-            line: `${pos}  ✓ on target →  0.0bb/100`
-          });
+          line = `${pos}  ✓ on target →  0.0bb/100`;
         } else if (diff > 0) {
-          const leak = diff * EXPLOIT_MODEL.tooWideCost;
-          details.push({
-            pos,
-            diff,
-            actualPct,
-            gto,
-            leak,
-            wide: true,
-            line: `${pos}  +${diff}% wide  →  est. -${leak.toFixed(1)}bb/100`
-          });
+          const rawLeak = diff * EXPLOIT_MODEL.tooWideCost;
+          leak = rawLeak * (1 - accuracy);
+          wide = true;
+          line = `${pos}  +${diff}% wide  →  ${leak.toFixed(2)}bb/100`;
         } else {
-          const leak = Math.abs(diff) * EXPLOIT_MODEL.tooTightCost;
-          details.push({
-            pos,
-            diff,
-            actualPct,
-            gto,
-            leak,
-            wide: false,
-            line: `${pos}  ${diff}% tight  →  est. -${leak.toFixed(1)}bb/100`
-          });
+          const rawLeak = Math.abs(diff) * EXPLOIT_MODEL.tooTightCost;
+          leak = rawLeak * (1 - accuracy);
+          wide = false;
+          line = `${pos}  ${diff}% tight  →  ${leak.toFixed(2)}bb/100`;
         }
+        details.push({ pos, diff, actualPct, gto, leak, wide, line });
       }
-      const totalLeakBB = details.reduce((s, d) => s + d.leak, 0);
+      let totalLeakBB = Math.max(0, details.reduce((s, d) => s + d.leak, 0));
       let tier;
       let tierLabel;
-      if (totalLeakBB < 1.0) {
+      if (totalLeakBB < 0.5) {
         tier = "teal";
-        tierLabel = "Near unexploitable";
-      } else if (totalLeakBB <= 2.5) {
+        tierLabel = "Unexploitable";
+      } else if (totalLeakBB < 1.5) {
+        tier = "marginal";
+        tierLabel = "Marginally exploitable";
+      } else if (totalLeakBB < 3.0) {
         tier = "amber";
         tierLabel = "Exploitable";
       } else {
@@ -2692,11 +2695,11 @@
     function renderDrillExploitabilityCardHTML() {
       const snap = getDrillExploitabilitySnapshot();
       const disc =
-        '<p class="drill-exploit-disclaimer">* EV estimates are simplified heuristics based on open frequency deviation, not a full CFR solve</p>';
+        '<p class="drill-exploit-disclaimer">* Score reflects accuracy-weighted open frequency deviation from GTO targets — not a full CFR solve. Requires 10+ hands per position to activate.</p>';
       if (!snap.unlocked) {
         return (
           `<div class="drill-exploit-card drill-exploit-card-locked"><div class="drill-exploit-card-title">Exploitability Score</div>` +
-          `<p class="drill-exploit-locked-hint">Keep drilling — exploitability score unlocks after enough hands per position</p>` +
+          `<p class="drill-exploit-locked-hint">Exploitability score unlocks after 10+ hands per position</p>` +
           `<p class="drill-exploit-card-progress">3 positions needed · ${snap.positionsReady} ready</p></div>${disc}`
         );
       }
@@ -2723,17 +2726,15 @@
         const elapsed = now - t0;
         const u = Math.min(1, elapsed / duration);
         const cur = target * u;
-        if (target <= 0) valEl.textContent = "0.0";
-        else valEl.textContent = `−${cur.toFixed(1)}`;
+        valEl.textContent = cur.toFixed(1);
         if (u < 1) {
           preflopDrillState.exploitAnimRaf = requestAnimationFrame(frame);
         } else {
           preflopDrillState.exploitAnimRaf = null;
-          if (target <= 0) valEl.textContent = "0.0";
-          else valEl.textContent = `−${target.toFixed(1)}`;
+          valEl.textContent = target.toFixed(1);
         }
       }
-      valEl.textContent = target <= 0 ? "0.0" : "−0.0";
+      valEl.textContent = target <= 0 ? "0.0" : Number(target).toFixed(1);
       preflopDrillState.exploitAnimRaf = requestAnimationFrame(frame);
     }
 
@@ -3118,7 +3119,11 @@
       const pst = preflopDrillState.positionStats[statsBucket];
       if (pst) {
         pst.total += 1;
-        if (correct) pst.correct += 1;
+        if (correct) {
+          pst.correct += 1;
+          if (pick === "open") pst.correctOpens += 1;
+          else pst.correctFolds += 1;
+        }
         if (pick === "open") pst.opened += 1;
         else pst.folded += 1;
       }
