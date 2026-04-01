@@ -4299,11 +4299,23 @@
 
     document.addEventListener("keydown", (e) => {
       if (el.preflopDrillPanel.classList.contains("hidden")) return;
-      if (el.drillSessionOverlay && !el.drillSessionOverlay.classList.contains("hidden")) return;
       const t = e.target;
       const tag = t && t.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
       if (e.repeat) return;
+
+      const sessionOverlayShowing =
+        el.drillSessionOverlay && !el.drillSessionOverlay.classList.contains("hidden");
+
+      if (e.key === " " && sessionOverlayShowing) {
+        e.preventDefault();
+        if (el.drillSessionOverlay) el.drillSessionOverlay.classList.add("hidden");
+        dealPreflopDrillHand();
+        updatePreflopDrillPanel();
+        return;
+      }
+
+      if (sessionOverlayShowing) return;
 
       const verdictShowing = !el.drillVerdictPanel.classList.contains("hidden");
       const nextAvailable = verdictShowing && !el.drillNextBtn.disabled;
