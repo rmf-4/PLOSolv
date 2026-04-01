@@ -390,12 +390,209 @@
       display: flex;
       flex-wrap: wrap;
       align-items: center;
+      justify-content: space-between;
       gap: 10px 14px;
-      padding-right: 120px;
+      width: 100%;
+      box-sizing: border-box;
     }
     .drill-head h2 {
       margin: 0;
       font-size: 0.96rem;
+    }
+    .drill-head-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+    .drill-score-cluster {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+    .drill-streak-badge {
+      font-size: 0.78rem;
+      font-weight: 650;
+      color: #ffb432;
+      background: rgba(255, 180, 50, 0.18);
+      border: 1px solid rgba(255, 180, 50, 0.35);
+      border-radius: 8px;
+      padding: 5px 9px;
+      white-space: nowrap;
+    }
+    .drill-streak-badge.hidden {
+      display: none !important;
+    }
+    @keyframes streakPulse {
+      0%,
+      100% {
+        transform: scale(1);
+      }
+      50% {
+        transform: scale(1.18);
+      }
+    }
+    .drill-streak-pulse {
+      animation: streakPulse 0.4s ease;
+    }
+    button.drill-hard-mode-btn {
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: #162721;
+      color: #d9ebe3;
+      padding: 5px 11px;
+      border-radius: 8px;
+      font-size: 0.78rem;
+      font-weight: 650;
+      cursor: pointer;
+    }
+    button.drill-hard-mode-btn.active {
+      background: rgba(56, 211, 159, 0.22);
+      border-color: rgba(56, 211, 159, 0.45);
+      color: #e8f6ef;
+    }
+    .drill-session-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      pointer-events: auto;
+    }
+    .drill-session-overlay.hidden {
+      display: none !important;
+    }
+    .drill-session-card {
+      max-width: 420px;
+      width: 100%;
+      background: #0d1a15;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 12px;
+      padding: 16px 18px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+    }
+    .drill-session-card h3 {
+      margin: 0 0 10px;
+      font-size: 1rem;
+      font-weight: 800;
+      color: #eaf5ef;
+    }
+    .drill-session-card p {
+      margin: 6px 0;
+      font-size: 0.82rem;
+      line-height: 1.45;
+      color: #d0e3da;
+    }
+    .drill-session-motivate {
+      margin-top: 12px !important;
+      font-weight: 650;
+      color: #c8ddd4 !important;
+    }
+    .drill-session-card .primary {
+      margin-top: 14px;
+      width: 100%;
+    }
+    .drill-collapse {
+      margin-top: 4px;
+    }
+    .drill-collapse-head {
+      width: 100%;
+      text-align: left;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(0, 0, 0, 0.25);
+      color: #c8ddd4;
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 0.8rem;
+      font-weight: 650;
+      cursor: pointer;
+    }
+    .drill-collapse-head:hover {
+      background: rgba(255, 255, 255, 0.04);
+    }
+    .drill-collapse-body {
+      max-height: 500px;
+      overflow: hidden;
+      transition: max-height 0.3s ease;
+    }
+    .drill-collapse-body.collapsed {
+      max-height: 0;
+    }
+    .drill-collapse-inner {
+      padding: 10px 4px 4px;
+    }
+    .drill-bar-row {
+      display: grid;
+      grid-template-columns: 38px 1fr 52px;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      font-size: 0.76rem;
+      color: #c8ddd4;
+    }
+    .drill-bar-track {
+      height: 10px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 5px;
+      overflow: hidden;
+    }
+    .drill-bar-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 5px;
+      transition: width 0.4s ease;
+    }
+    .drill-bar-fill.teal {
+      background: #38d39f;
+    }
+    .drill-bar-fill.amber {
+      background: #ffb432;
+    }
+    .drill-bar-fill.red {
+      background: #ff6b6b;
+    }
+    .drill-subhead {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: #aec1b8;
+      margin: 12px 0 8px;
+    }
+    .drill-hand-history-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 6px 10px;
+      font-size: 0.74rem;
+      line-height: 1.4;
+      padding: 6px 8px;
+      border-radius: 8px;
+      margin-bottom: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .drill-hand-history-row.ok {
+      background: rgba(56, 211, 159, 0.06);
+    }
+    .drill-hand-history-row.bad {
+      background: rgba(255, 107, 107, 0.08);
+    }
+    .drill-hand-history-pos {
+      font-weight: 700;
+      color: #e8f6ef;
+    }
+    .drill-hand-history-cards {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: 0.02em;
+    }
+    .drill-verdict-hard-line {
+      font-size: 0.82rem;
+      color: #d0e3da;
+      line-height: 1.45;
+      margin: 0 0 12px;
+    }
+    .drill-verdict-hard-line.hidden {
+      display: none !important;
     }
     .drill-position-visual-row {
       display: flex;
@@ -517,6 +714,9 @@
       color: #d5e8df;
       margin-bottom: 8px;
     }
+    .drill-hand-score.hidden {
+      display: none !important;
+    }
     .drill-bullets {
       margin: 0 0 12px 1em;
       padding: 0;
@@ -525,8 +725,14 @@
       line-height: 1.45;
     }
     .drill-bullets li { margin-bottom: 4px; }
+    .drill-bullets.hidden {
+      display: none !important;
+    }
     .drill-footer {
       margin-top: 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
     }
 
     .range-grid {
@@ -878,9 +1084,15 @@
 
     <div class="table hidden" id="preflopDrillPanel">
       <div class="drill-wrap">
-        <div class="drill-score-corner" id="drillRunningScore">0/0 correct</div>
         <div class="drill-head">
           <h2>Preflop Drill</h2>
+          <div class="drill-head-actions">
+            <button type="button" class="drill-hard-mode-btn" id="drillHardModeBtn">Hard Mode</button>
+            <div class="drill-score-cluster">
+              <span class="drill-streak-badge hidden" id="drillStreakBadge" aria-live="polite"></span>
+              <div class="drill-score-corner" id="drillRunningScore">0/0 correct</div>
+            </div>
+          </div>
         </div>
         <div class="drill-position-visual-row">
           <div class="drill-position-visual-side drill-position-visual-side--left">
@@ -901,11 +1113,36 @@
         <div class="drill-verdict hidden" id="drillVerdictPanel">
           <div class="drill-verdict-title" id="drillVerdictTitle">CORRECT ✓</div>
           <div class="drill-hand-score" id="drillHandScoreLine">Hand Score: 0/100</div>
+          <p class="drill-verdict-hard-line hidden" id="drillVerdictHardLine"></p>
           <ul class="drill-bullets" id="drillBulletList"></ul>
           <button type="button" class="primary" id="drillNextBtn">Next Hand</button>
         </div>
+        <div class="drill-session-overlay hidden" id="drillSessionOverlay">
+          <div class="drill-session-card">
+            <h3 id="drillSessionTitle">Session Summary</h3>
+            <div id="drillSessionBody"></div>
+            <p class="drill-session-motivate" id="drillSessionMotivate"></p>
+            <button type="button" class="primary" id="drillSessionContinueBtn">Continue Drilling</button>
+          </div>
+        </div>
         <div class="drill-footer">
           <button type="button" class="secondary" id="drillResetScoreBtn">Reset Score</button>
+          <div class="drill-collapse">
+            <button type="button" class="drill-collapse-head" id="drillPosBreakdownToggle" aria-expanded="false">
+              ▸ Position Breakdown
+            </button>
+            <div class="drill-collapse-body collapsed" id="drillPosBreakdownBody">
+              <div class="drill-collapse-inner" id="drillPosBreakdownInner"></div>
+            </div>
+          </div>
+          <div class="drill-collapse">
+            <button type="button" class="drill-collapse-head" id="drillHandHistoryToggle" aria-expanded="false">
+              ▸ Last 10 Hands
+            </button>
+            <div class="drill-collapse-body collapsed" id="drillHandHistoryBody">
+              <div class="drill-collapse-inner" id="drillHandHistoryInner"></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -978,8 +1215,24 @@
     const PREFLOP_OPEN_THRESHOLDS = { UTG: 62, HJ: 55, CO: 48, BTN: 38, SB: 33 };
 
     let preflopDrillPrevTab = null;
-    let preflopDrillCorrect = 0;
-    let preflopDrillTotal = 0;
+    function drillEmptyPositionStats() {
+      return {
+        UTG: { correct: 0, total: 0 },
+        HJ: { correct: 0, total: 0 },
+        CO: { correct: 0, total: 0 },
+        BTN: { correct: 0, total: 0 },
+        SB: { correct: 0, total: 0 }
+      };
+    }
+    function drillEmptyArchetypeStats() {
+      return {
+        AA: { correct: 0, total: 0 },
+        KK: { correct: 0, total: 0 },
+        QQ: { correct: 0, total: 0 },
+        PAIR: { correct: 0, total: 0 },
+        RUNDOWN: { correct: 0, total: 0 }
+      };
+    }
     const preflopDrillState = {
       cards: [],
       position: "CO",
@@ -987,7 +1240,15 @@
       answerLock: false,
       userPick: null,
       lastEval: null,
-      justDealt: false
+      justDealt: false,
+      correct: 0,
+      total: 0,
+      streak: 0,
+      hardMode: false,
+      currentBlockHands: [],
+      handHistory: [],
+      positionStats: drillEmptyPositionStats(),
+      archetypeStats: drillEmptyArchetypeStats()
     };
 
     const el = {
@@ -1056,8 +1317,22 @@
       drillVerdictTitle: document.getElementById("drillVerdictTitle"),
       drillHandScoreLine: document.getElementById("drillHandScoreLine"),
       drillBulletList: document.getElementById("drillBulletList"),
+      drillVerdictHardLine: document.getElementById("drillVerdictHardLine"),
       drillNextBtn: document.getElementById("drillNextBtn"),
-      drillResetScoreBtn: document.getElementById("drillResetScoreBtn")
+      drillResetScoreBtn: document.getElementById("drillResetScoreBtn"),
+      drillHardModeBtn: document.getElementById("drillHardModeBtn"),
+      drillStreakBadge: document.getElementById("drillStreakBadge"),
+      drillSessionOverlay: document.getElementById("drillSessionOverlay"),
+      drillSessionTitle: document.getElementById("drillSessionTitle"),
+      drillSessionBody: document.getElementById("drillSessionBody"),
+      drillSessionMotivate: document.getElementById("drillSessionMotivate"),
+      drillSessionContinueBtn: document.getElementById("drillSessionContinueBtn"),
+      drillPosBreakdownToggle: document.getElementById("drillPosBreakdownToggle"),
+      drillPosBreakdownBody: document.getElementById("drillPosBreakdownBody"),
+      drillPosBreakdownInner: document.getElementById("drillPosBreakdownInner"),
+      drillHandHistoryToggle: document.getElementById("drillHandHistoryToggle"),
+      drillHandHistoryBody: document.getElementById("drillHandHistoryBody"),
+      drillHandHistoryInner: document.getElementById("drillHandHistoryInner")
     };
 
     function fullDeck() {
@@ -1651,8 +1926,14 @@
     }
 
     function resetPreflopDrillRunningScore() {
-      preflopDrillCorrect = 0;
-      preflopDrillTotal = 0;
+      preflopDrillState.correct = 0;
+      preflopDrillState.total = 0;
+      preflopDrillState.streak = 0;
+      preflopDrillState.currentBlockHands = [];
+      preflopDrillState.handHistory = [];
+      preflopDrillState.positionStats = drillEmptyPositionStats();
+      preflopDrillState.archetypeStats = drillEmptyArchetypeStats();
+      if (el.drillSessionOverlay) el.drillSessionOverlay.classList.add("hidden");
     }
 
     function dealPreflopDrillHand() {
@@ -1684,7 +1965,6 @@
       ];
       let circ = "";
       let lab = "";
-      let innerLab = "";
       for (const s of seats) {
         const act = s.id === pos && s.id !== "BB";
         const r = act ? 14 : 10;
@@ -1692,16 +1972,228 @@
         const fi = act ? "filter=\"url(#glow)\"" : "";
         circ += `<circle cx="${s.cx}" cy="${s.cy}" r="${r}" fill="${fl}" ${fi}/>`;
         lab += `<text x="${s.lx}" y="${s.ly}" text-anchor="${s.anchor}" font-size="11" font-family="inherit" font-weight="600" fill="${act ? "#ffffff" : "rgba(255,255,255,0.5)"}">${s.id}</text>`;
-        if (act) {
-          innerLab += `<text x="${s.cx}" y="${s.cy}" text-anchor="middle" dominant-baseline="central" font-size="8" font-family="inherit" font-weight="700" fill="#ffffff">${s.id}</text>`;
+      }
+      return `<svg width="260" height="170" viewBox="0 0 260 170" xmlns="http://www.w3.org/2000/svg"><defs><filter id="glow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><ellipse cx="130" cy="85" rx="104" ry="66" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="3"/><ellipse cx="130" cy="85" rx="100" ry="62" fill="#1a4a38" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>${circ}${lab}</svg>`;
+    }
+
+    function drillCardCompact(card) {
+      if (!card) return "";
+      const suit = SUITS.find((x) => x.id === card[1]);
+      return card[0] + (suit ? suit.symbol : "");
+    }
+
+    function drillPickThresholdLine(ev) {
+      const line = ev.reasons.find((x) => typeof x === "string" && x.startsWith("📍"));
+      return line || "";
+    }
+
+    function pickDrillBullets(ev) {
+      if (Array.isArray(ev.drillExplain) && ev.drillExplain.length) return ev.drillExplain.slice(0, 3);
+      return ev.reasons.slice(0, 3);
+    }
+
+    function drillAccuracyBarClass(pct) {
+      if (pct >= 70) return "teal";
+      if (pct >= 40) return "amber";
+      return "red";
+    }
+
+    function paintDrillVerdict(ev, wasCorrect) {
+      el.drillVerdictTitle.textContent = wasCorrect ? "CORRECT ✓" : "INCORRECT ✗";
+      el.drillVerdictTitle.classList.remove("ok", "bad");
+      el.drillVerdictTitle.classList.add(wasCorrect ? "ok" : "bad");
+      const hardLn = el.drillVerdictHardLine;
+      if (preflopDrillState.hardMode) {
+        el.drillHandScoreLine.classList.add("hidden");
+        el.drillBulletList.classList.add("hidden");
+        el.drillBulletList.innerHTML = "";
+        if (hardLn) {
+          hardLn.classList.remove("hidden");
+          hardLn.textContent = drillPickThresholdLine(ev);
+        }
+      } else {
+        el.drillHandScoreLine.classList.remove("hidden");
+        el.drillHandScoreLine.textContent = `Hand Score: ${ev.score}/100`;
+        if (hardLn) {
+          hardLn.classList.add("hidden");
+          hardLn.textContent = "";
+        }
+        el.drillBulletList.classList.remove("hidden");
+        el.drillBulletList.innerHTML = "";
+        for (const line of pickDrillBullets(ev)) {
+          const li = document.createElement("li");
+          li.textContent = line;
+          el.drillBulletList.appendChild(li);
         }
       }
-      return `<svg width="260" height="170" viewBox="0 0 260 170" xmlns="http://www.w3.org/2000/svg"><defs><filter id="glow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><ellipse cx="130" cy="85" rx="104" ry="66" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="3"/><ellipse cx="130" cy="85" rx="100" ry="62" fill="#1a4a38" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>${circ}${lab}${innerLab}</svg>`;
+    }
+
+    function animateDrillBars(container) {
+      if (!container) return;
+      const fills = container.querySelectorAll(".drill-bar-fill[data-pct]");
+      fills.forEach((node) => {
+        node.style.width = "0%";
+      });
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          fills.forEach((node) => {
+            node.style.width = `${node.getAttribute("data-pct")}%`;
+          });
+        });
+      });
+    }
+
+    function renderDrillPositionBreakdownHTML() {
+      const order = ["UTG", "HJ", "CO", "BTN", "SB"];
+      let html = "";
+      for (const pos of order) {
+        const st = preflopDrillState.positionStats[pos];
+        const t = st.total;
+        const c = st.correct;
+        if (t < 1) {
+          html += `<div class="drill-bar-row"><span>${pos}</span><div class="drill-bar-track"></div><span>—</span></div>`;
+        } else {
+          const pct = Math.round((c / t) * 100);
+          const cls = drillAccuracyBarClass(pct);
+          html += `<div class="drill-bar-row"><span>${pos}</span><div class="drill-bar-track"><div class="drill-bar-fill ${cls}" data-pct="${pct}" style="width:0%"></div></div><span>${c}/${t}</span></div>`;
+        }
+      }
+      html += `<div class="drill-subhead">Archetype Accuracy</div>`;
+      const archRows = [
+        ["AA", "AA"],
+        ["KK", "KK"],
+        ["QQ", "QQ"],
+        ["PAIR", "Pair"],
+        ["RUNDOWN", "Rundown"]
+      ];
+      let anyArch = false;
+      for (const [key, label] of archRows) {
+        const st = preflopDrillState.archetypeStats[key];
+        if (!st || st.total < 1) continue;
+        anyArch = true;
+        const pct = Math.round((st.correct / st.total) * 100);
+        const cls = drillAccuracyBarClass(pct);
+        html += `<div class="drill-bar-row"><span>${label}</span><div class="drill-bar-track"><div class="drill-bar-fill ${cls}" data-pct="${pct}" style="width:0%"></div></div><span>${st.correct}/${st.total}</span></div>`;
+      }
+      if (!anyArch) {
+        html += `<p style="font-size:0.74rem;color:#8a9e95;margin:0">Play hands to see archetype stats.</p>`;
+      }
+      return html;
+    }
+
+    function renderDrillHandHistoryHTML() {
+      const rows = preflopDrillState.handHistory;
+      if (!rows.length) {
+        return '<p style="font-size:0.76rem;color:#8a9e95;margin:0">No hands yet.</p>';
+      }
+      return rows
+        .map((h) => {
+          const cls = h.wasCorrect ? "ok" : "bad";
+          const check = h.wasCorrect ? "✓" : "✗";
+          const userWord = h.userPick === "open" ? "OPEN" : "FOLD";
+          const ansWord = h.correctAction === "open" ? "OPEN" : "FOLD";
+          return `<div class="drill-hand-history-row ${cls}"><span class="drill-hand-history-pos">${h.position}</span><span class="drill-hand-history-cards">${h.cardsCompact}</span><span>You: ${userWord}</span><span>Correct: ${ansWord} ${check}</span><span>${h.score}pts</span></div>`;
+        })
+        .join("");
+    }
+
+    function updateDrillBreakdownPanels() {
+      if (el.drillPosBreakdownInner) {
+        el.drillPosBreakdownInner.innerHTML = renderDrillPositionBreakdownHTML();
+        if (el.drillPosBreakdownBody && !el.drillPosBreakdownBody.classList.contains("collapsed")) {
+          animateDrillBars(el.drillPosBreakdownInner);
+        }
+      }
+      if (el.drillHandHistoryInner) {
+        el.drillHandHistoryInner.innerHTML = renderDrillHandHistoryHTML();
+      }
+    }
+
+    function updateDrillStreakBadgeUI() {
+      const badge = el.drillStreakBadge;
+      if (!badge) return;
+      if (preflopDrillState.streak >= 2) {
+        badge.classList.remove("hidden");
+        badge.textContent = `🔥 ${preflopDrillState.streak} streak`;
+      } else {
+        badge.classList.add("hidden");
+        badge.textContent = "";
+      }
+    }
+
+    function maybePulseStreakBadge() {
+      const badge = el.drillStreakBadge;
+      if (!badge || preflopDrillState.streak < 2) return;
+      const s = preflopDrillState.streak;
+      if (s === 5 || s === 10 || s === 15) {
+        badge.classList.add("drill-streak-pulse");
+        setTimeout(() => badge.classList.remove("drill-streak-pulse"), 400);
+      }
+    }
+
+    function buildDrillSessionBlockSummary(block) {
+      const correctN = block.filter((h) => h.correct).length;
+      const accPct = Math.round((correctN / block.length) * 100);
+      const byPos = {};
+      for (const pos of PREFLOP_DRILL_POSITIONS) {
+        byPos[pos] = { c: 0, t: 0 };
+      }
+      for (const h of block) {
+        if (!byPos[h.position]) continue;
+        byPos[h.position].t += 1;
+        if (h.correct) byPos[h.position].c += 1;
+      }
+      const breakdown = PREFLOP_DRILL_POSITIONS.map((pos) => {
+        const b = byPos[pos];
+        return `${pos} ${b.c}/${b.t}`;
+      }).join(" · ");
+      let bestPos = null;
+      let bestPct = -1;
+      let worstPos = null;
+      let worstPct = 101;
+      for (const pos of PREFLOP_DRILL_POSITIONS) {
+        const b = byPos[pos];
+        if (b.t < 1) continue;
+        const p = (b.c / b.t) * 100;
+        if (p > bestPct) {
+          bestPct = p;
+          bestPos = pos;
+        }
+        if (p < worstPct) {
+          worstPct = p;
+          worstPos = pos;
+        }
+      }
+      let motivate;
+      if (accPct >= 80) motivate = "Solid session, keep going";
+      else if (accPct >= 60) motivate = "Good work, watch your early position opens";
+      else motivate = "Tighten up — focus on UTG and HJ ranges";
+      return {
+        accPct,
+        breakdown,
+        bestPos: bestPos != null ? `${bestPos} (${Math.round(bestPct)}%)` : "—",
+        worstPos: worstPos != null ? `${worstPos} (${Math.round(worstPct)}%)` : "—",
+        motivate
+      };
+    }
+
+    function showDrillSessionOverlay(block) {
+      const endHand = preflopDrillState.total;
+      const startHand = endHand - block.length + 1;
+      const sum = buildDrillSessionBlockSummary(block);
+      el.drillSessionTitle.textContent = `Session Summary — Hands ${startHand}–${endHand}`;
+      el.drillSessionBody.innerHTML = `<p>Overall accuracy: <strong>${sum.accPct}%</strong></p><p>Best position: ${sum.bestPos}</p><p>Worst position: ${sum.worstPos}</p><p>${sum.breakdown}</p>`;
+      el.drillSessionMotivate.textContent = sum.motivate;
+      el.drillSessionOverlay.classList.remove("hidden");
     }
 
     function updatePreflopDrillPanel() {
       if (state.tab !== "preflopDrill") return;
-      el.drillRunningScore.textContent = `${preflopDrillCorrect}/${preflopDrillTotal} correct`;
+      el.drillRunningScore.textContent = `${preflopDrillState.correct}/${preflopDrillState.total} correct`;
+      updateDrillStreakBadgeUI();
+      if (el.drillHardModeBtn) {
+        el.drillHardModeBtn.classList.toggle("active", preflopDrillState.hardMode);
+      }
       el.drillPositionBadge.textContent = `You are ${preflopDrillState.position}`;
       el.drillTableDiagram.innerHTML = renderDrillTableSvg(preflopDrillState.position);
       el.drillCardsRow.innerHTML = "";
@@ -1727,14 +2219,19 @@
       if (!showVerdict) {
         el.drillVerdictTitle.textContent = "";
         el.drillHandScoreLine.textContent = "";
+        el.drillHandScoreLine.classList.remove("hidden");
         el.drillBulletList.innerHTML = "";
+        el.drillBulletList.classList.remove("hidden");
+        if (el.drillVerdictHardLine) {
+          el.drillVerdictHardLine.textContent = "";
+          el.drillVerdictHardLine.classList.add("hidden");
+        }
         el.drillVerdictTitle.classList.remove("ok", "bad");
+      } else if (preflopDrillState.lastEval) {
+        const wasCorrect = preflopDrillState.userPick === preflopDrillState.lastEval.action;
+        paintDrillVerdict(preflopDrillState.lastEval, wasCorrect);
       }
-    }
-
-    function pickDrillBullets(ev) {
-      if (Array.isArray(ev.drillExplain) && ev.drillExplain.length) return ev.drillExplain.slice(0, 3);
-      return ev.reasons.slice(0, 3);
+      updateDrillBreakdownPanels();
     }
 
     function submitDrillAnswer(pick) {
@@ -1747,19 +2244,47 @@
       preflopDrillState.userPick = pick;
       preflopDrillState.answered = true;
       const correct = pick === ev.action;
-      preflopDrillTotal += 1;
-      if (correct) preflopDrillCorrect += 1;
-      el.drillVerdictTitle.classList.remove("ok", "bad");
-      el.drillVerdictTitle.classList.add(correct ? "ok" : "bad");
-      el.drillVerdictTitle.textContent = correct ? "CORRECT ✓" : "INCORRECT ✗";
-      el.drillHandScoreLine.textContent = `Hand Score: ${ev.score}/100`;
-      el.drillBulletList.innerHTML = "";
-      for (const line of pickDrillBullets(ev)) {
-        const li = document.createElement("li");
-        li.textContent = line;
-        el.drillBulletList.appendChild(li);
+      preflopDrillState.total += 1;
+      if (correct) {
+        preflopDrillState.correct += 1;
+        preflopDrillState.streak += 1;
+        maybePulseStreakBadge();
+      } else {
+        preflopDrillState.streak = 0;
       }
+      const pos = preflopDrillState.position;
+      const pst = preflopDrillState.positionStats[pos];
+      if (pst) {
+        pst.total += 1;
+        if (correct) pst.correct += 1;
+      }
+      const archKey = ev.archetype;
+      if (archKey && preflopDrillState.archetypeStats[archKey] != null) {
+        const ast = preflopDrillState.archetypeStats[archKey];
+        ast.total += 1;
+        if (correct) ast.correct += 1;
+      }
+      preflopDrillState.currentBlockHands.push({
+        position: pos,
+        correct,
+        archetype: archKey
+      });
+      const hist = {
+        position: pos,
+        cardsCompact: preflopDrillState.cards.map(drillCardCompact).join(" "),
+        userPick: pick,
+        correctAction: ev.action,
+        score: ev.score,
+        wasCorrect: correct
+      };
+      preflopDrillState.handHistory.unshift(hist);
+      if (preflopDrillState.handHistory.length > 10) preflopDrillState.handHistory.length = 10;
       updatePreflopDrillPanel();
+      if (preflopDrillState.currentBlockHands.length >= 10) {
+        const block = preflopDrillState.currentBlockHands.slice();
+        preflopDrillState.currentBlockHands.length = 0;
+        showDrillSessionOverlay(block);
+      }
     }
 
     function cardSuitMeta(card) {
@@ -3384,6 +3909,42 @@
       updatePreflopDrillPanel();
     });
 
+    if (el.drillSessionContinueBtn) {
+      el.drillSessionContinueBtn.addEventListener("click", () => {
+        if (el.drillSessionOverlay) el.drillSessionOverlay.classList.add("hidden");
+        dealPreflopDrillHand();
+        updatePreflopDrillPanel();
+      });
+    }
+
+    if (el.drillHardModeBtn) {
+      el.drillHardModeBtn.addEventListener("click", () => {
+        preflopDrillState.hardMode = !preflopDrillState.hardMode;
+        el.drillHardModeBtn.classList.toggle("active", preflopDrillState.hardMode);
+        if (state.tab === "preflopDrill" && preflopDrillState.answered && preflopDrillState.lastEval) {
+          const ok = preflopDrillState.userPick === preflopDrillState.lastEval.action;
+          paintDrillVerdict(preflopDrillState.lastEval, ok);
+        }
+      });
+    }
+
+    function wireDrillCollapseToggle(btn, body, labelText) {
+      if (!btn || !body) return;
+      btn.addEventListener("click", () => {
+        body.classList.toggle("collapsed");
+        const expanded = !body.classList.contains("collapsed");
+        btn.setAttribute("aria-expanded", expanded ? "true" : "false");
+        const arrow = expanded ? "▾" : "▸";
+        btn.textContent = `${arrow} ${labelText}`;
+        if (expanded && body === el.drillPosBreakdownBody && el.drillPosBreakdownInner) {
+          animateDrillBars(el.drillPosBreakdownInner);
+        }
+      });
+    }
+
+    wireDrillCollapseToggle(el.drillPosBreakdownToggle, el.drillPosBreakdownBody, "Position Breakdown");
+    wireDrillCollapseToggle(el.drillHandHistoryToggle, el.drillHandHistoryBody, "Last 10 Hands");
+
     function flashDrillShortcut(btn) {
       if (!btn) return;
       btn.classList.add("shortcut-flash");
@@ -3392,6 +3953,7 @@
 
     document.addEventListener("keydown", (e) => {
       if (el.preflopDrillPanel.classList.contains("hidden")) return;
+      if (el.drillSessionOverlay && !el.drillSessionOverlay.classList.contains("hidden")) return;
       const t = e.target;
       const tag = t && t.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
