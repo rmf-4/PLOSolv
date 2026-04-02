@@ -1481,13 +1481,14 @@
       HJ: { UTG: 6 },
       CO: { UTG: 7, HJ: 9 },
       BTN: { UTG: 8, HJ: 10, CO: 13 },
-      SB: { UTG: 5, HJ: 7, CO: 9, BTN: 11 }
+      SB: { CO: 9, BTN: 11 }
     };
+    /** Narrow call zones — PLO IP vs open is mostly 3-bet or fold */
     const CALL_FREQ = {
-      HJ: { UTG: 12 },
-      CO: { UTG: 14, HJ: 16 },
-      BTN: { UTG: 18, HJ: 20, CO: 22 },
-      SB: { UTG: 10, HJ: 12, CO: 15, BTN: 18 }
+      HJ: { UTG: 6 },
+      CO: { UTG: 7, HJ: 8 },
+      BTN: { UTG: 9, HJ: 10, CO: 11 },
+      SB: { CO: 7, BTN: 8 }
     };
     const FOUR_BET_FREQ = {
       UTG: { BTN: 18, CO: 16, HJ: 14 },
@@ -1501,6 +1502,20 @@
       CO: { BTN: 12, SB: 6, BB: 7 },
       BTN: { SB: 14, BB: 10 }
     };
+    /** Weighted 4-bet drill spots — UTG open vs BTN 3-bet most common live */
+    const FOUR_BET_SPOTS = [
+      { o: "UTG", v: "BTN", w: 30 },
+      { o: "UTG", v: "CO", w: 12 },
+      { o: "UTG", v: "HJ", w: 8 },
+      { o: "HJ", v: "BTN", w: 14 },
+      { o: "HJ", v: "CO", w: 10 },
+      { o: "HJ", v: "SB", w: 6 },
+      { o: "CO", v: "BTN", w: 14 },
+      { o: "CO", v: "SB", w: 8 },
+      { o: "CO", v: "BB", w: 6 },
+      { o: "BTN", v: "SB", w: 11 },
+      { o: "BTN", v: "BB", w: 10 }
+    ];
     const DRILL_ORBIT_WORST_HINT = {
       UTG: "Toughest spot: UTG — review opening ranges from under the gun",
       HJ: "Toughest spot: HJ — review hijack opening ranges",
@@ -2429,11 +2444,22 @@
       }
       const fourBetThreshold = 100 - fb;
       const callThreshold = 100 - (fb + cf);
+      let zoneScore = base.score;
+      if (base.archetype === "KK") {
+        if (base.suitedPts >= 15) zoneScore = Math.min(100, base.score + 6);
+        else if (base.suitedPts >= 8) zoneScore = Math.min(100, base.score + 3);
+      }
       let action = "fold";
-      if (base.score >= fourBetThreshold) action = "open";
-      else if (base.score >= callThreshold) action = "call";
+      if (base.archetype === "AA") {
+        action = "open";
+      } else if (zoneScore >= fourBetThreshold) action = "open";
+      else if (zoneScore >= callThreshold) action = "call";
       const actWord = action === "open" ? "4-bet" : action === "call" ? "call" : "fold";
-      const exLine = `📍 ${openerPos} vs ${villainPos} 3-bet — 4-bet top ${fb}%, call next ${cf}%, fold the rest. Your hand scored ${base.score} (${actWord})`;
+      const scoreNote =
+        base.archetype === "AA"
+          ? `Pocket aces always 4-bet vs a 3-bet (score ${base.score})`
+          : `Your hand scored ${base.score}${zoneScore !== base.score ? ` (vs-3-bet strength ${zoneScore})` : ""} (${actWord})`;
+      const exLine = `📍 ${openerPos} vs ${villainPos} 3-bet — 4-bet top ${fb}%, call next ${cf}%, fold the rest. ${scoreNote}`;
       const reasons = base.reasons.filter((x) => typeof x !== "string" || !x.startsWith("📍"));
       reasons.push(exLine);
       const drillExplain = [];
@@ -2544,7 +2570,8 @@
 
     const DRILL_DEAL_MARGIN = 12;
     const DRILL_DEAL_TARGET = { open: 0.35, fold: 0.35, marginal: 0.3 };
-    const DRILL_DEAL_TARGET_FACING_OPEN = { open: 0.25, call: 0.3, marginal: 0.15, fold: 0.3 };
+    /** 3-Bet / 4-Bet drills only — fewer “correct call” deals than old 30% call target */
+    const DRILL_DEAL_TARGET_THREE_ZONE = { open: 0.32, call: 0.12, marginal: 0.18, fold: 0.38 };
 
     function drillDealUsesThreeZoneBuckets() {
       const sm = preflopDrillState.subMode;
@@ -2568,16 +2595,11 @@
 
     function drillPickWeightedDealBucket() {
       if (drillDealUsesThreeZoneBuckets()) {
+        const T = DRILL_DEAL_TARGET_THREE_ZONE;
         const r = Math.random();
-        if (r < DRILL_DEAL_TARGET_FACING_OPEN.open) return "open";
-        if (r < DRILL_DEAL_TARGET_FACING_OPEN.open + DRILL_DEAL_TARGET_FACING_OPEN.call) return "call";
-        if (
-          r <
-          DRILL_DEAL_TARGET_FACING_OPEN.open +
-            DRILL_DEAL_TARGET_FACING_OPEN.call +
-            DRILL_DEAL_TARGET_FACING_OPEN.marginal
-        )
-          return "marginal";
+        if (r < T.open) return "open";
+        if (r < T.open + T.call) return "call";
+        if (r < T.open + T.call + T.marginal) return "marginal";
         return "fold";
       }
       const r = Math.random();
@@ -2619,6 +2641,18 @@
       return "UTG";
     }
 
+    function drillPickFourBetSpot() {
+      let t = 0;
+      for (const s of FOUR_BET_SPOTS) t += s.w;
+      let r = Math.random() * t;
+      for (const s of FOUR_BET_SPOTS) {
+        r -= s.w;
+        if (r <= 0) return { o: s.o, v: s.v };
+      }
+      const last = FOUR_BET_SPOTS[FOUR_BET_SPOTS.length - 1];
+      return { o: last.o, v: last.v };
+    }
+
     function dealPreflopDrillHand() {
       preflopDrillState.answered = false;
       preflopDrillState.answerLock = false;
@@ -2638,10 +2672,9 @@
       }
       if (preflopDrillState.subMode === "4bet") {
         preflopDrillState.threeBetVillain = null;
-        const openers = Object.keys(FOUR_BET_FREQ);
-        preflopDrillState.fourBetOpenPos = openers[Math.floor(Math.random() * openers.length)];
-        const villains = Object.keys(FOUR_BET_FREQ[preflopDrillState.fourBetOpenPos]);
-        preflopDrillState.fourBetVillainPos = villains[Math.floor(Math.random() * villains.length)];
+        const spot = drillPickFourBetSpot();
+        preflopDrillState.fourBetOpenPos = spot.o;
+        preflopDrillState.fourBetVillainPos = spot.v;
         preflopDrillState.position = preflopDrillState.fourBetOpenPos;
         drillAssignWeightedPreflopCards();
         return;
